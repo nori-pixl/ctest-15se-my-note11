@@ -2,16 +2,14 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v10"
+app.secret_key = "bbs_render_gateway_final_perfect_v11"
 
-# ⚠️ 【ここが最重要です！】
-# 今、あなたのタブレット（Termux）の画面の一番下に表示されている
-# 「https://〜〜〜.trycloudflare.com」という長いURLを、以下の "" の中に丸ごと貼り付けてください。
-TUNNEL_URL = "https://expression-bride-cent-howard.trycloudflare.com"
+# ⚠️ 【超重要】今タブレット（Termux）の画面に映っている最新のURLをここに一言一句間違いなく貼り付けてください
+TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>秘密の掲示板</title><style>
+<title>掲示板</title><style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
     .post{border-bottom:1px solid #ccc;padding:10px 0;}
@@ -98,11 +96,9 @@ HTML = """
 """
 
 def remote_api(endpoint, payload):
-    try:
-        r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
-        return r.json()
-    except:
-        return {}
+    # ⚠️ エラーを隠すセーフティ(except)を取り外し、通信失敗時に直接エラーを出すように変更
+    r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
+    return r.json()
 
 @app.route('/')
 def index():
@@ -110,13 +106,10 @@ def index():
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
     
-    # タブレットから届いた [1, "一般クラス"] などのデータをJinja2が読める辞書型に100%確実に展開
+    # タブレットから届く {"items": [[1, "一般クラス"]]} の形を完璧に展開して画面に流します
     for item in res.get("items", []):
-        try:
-            if isinstance(item, list) and len(item) >= 2:
-                items.append({"id": str(item[0]), "name": str(item[1])})
-        except:
-            pass
+        if isinstance(item, list) and len(item) >= 2:
+            items.append({"id": str(item[0]), "name": str(item[1])})
             
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
@@ -153,15 +146,14 @@ def remove_from_list(cid):
 def v_class(cid):
     sn = request.cookies.get('un', '名無し')
     res = remote_api("api/get_class_detail", {"cid": cid})
-    if "error" in res or not res.get("cname"): return redirect('/')
     
-    # 届いたデータを安全に1個の文字列として展開（カッコ対策）
-    cname_data = res.get("cname")
+    # クラス名が ['一般クラス'] のように届くのを完全に文字列に直します
+    cname_raw = res.get("cname")
     cname = "不明"
-    if isinstance(cname_data, list) and len(cname_data) > 0:
-        cname = str(cname_data[0])
-    elif cname_data:
-        cname = str(cname_data)
+    if isinstance(cname_raw, list) and len(cname_raw) > 0:
+        cname = str(cname_raw[0])
+    elif cname_raw:
+        cname = str(cname_raw)
         
     threads = []
     for t in res.get("threads", []):
@@ -181,14 +173,13 @@ def new_t(cid):
 def v_thread(cid, tid):
     sn = request.cookies.get('un', '名無し')
     res = remote_api("api/get_thread_detail", {"tid": tid})
-    if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
     
-    tname_data = res.get("tname")
+    tname_raw = res.get("tname")
     tname = "不明"
-    if isinstance(tname_data, list) and len(tname_data) > 0:
-        tname = str(tname_data[0])
-    elif tname_data:
-        tname = str(tname_data)
+    if isinstance(tname_raw, list) and len(tname_raw) > 0:
+        tname = str(tname_raw[0])
+    elif tname_raw:
+        tname = str(tname_raw)
         
     posts = []
     for p in res.get("posts", []):
