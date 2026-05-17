@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v5"
+app.secret_key = "bbs_render_gateway_final_perfect_v6"
 
-# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに書き換えました
+# ⚠️ あなたのタブレットの最新のCloudflare Tunnelの裏口URLを設定
 TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
@@ -18,6 +18,7 @@ HTML = """
 </style></head>
 <body>
     <h1><a href="/">掲示板メニュー</a></h1><hr>
+    {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {% if v == 'menu' %}
         {% if new_cid %}<div class="box" style="border:2px solid #2196f3;">作成成功！このクラスのID: <b style="font-size:1.4em;">{{new_cid}}</b></div>{% endif %}
@@ -58,6 +59,7 @@ HTML = """
                 <input type="submit" value="スレッド作成">
             </form>
         </div><hr>
+        <h3>スレ一覧</h3>
         <ul>{% for t in items %}
             <li style="margin-bottom:10px;">
                 <a href="/c/{{cid}}/t/{{t.id}}">{{t.title}}</a>
@@ -105,9 +107,10 @@ def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
+    # タブレットから届く [[1, "一般クラス"]] のような形式を完全に展開
     for item in res.get("items", []):
         if isinstance(item, list) and len(item) >= 2:
-            items.append({"id": item[0], "name": item[1]})
+            items.append({"id": int(item[0]), "name": str(item[1])})
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
@@ -121,7 +124,7 @@ def find_class():
         resp = make_response(redirect('/'))
         resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
         return resp
-    return redirect('/')
+    flash("そのIDのクラスは見つかりません"); return redirect('/')
 
 @app.route('/add_c', methods=['POST'])
 def add_c():
@@ -145,13 +148,14 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     if "error" in res or not res.get("cname"): return redirect('/')
     
+    # タブレットから届くタプル形式のデータを安全に文字列化
     cname_raw = res.get("cname")
-    cname = cname_raw[1] if (isinstance(cname_raw, list) and len(cname_raw) >= 2) else str(cname_raw)
+    cname = cname_raw[0] if (isinstance(cname_raw, list) and len(cname_raw) > 0) else str(cname_raw)
         
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, list) and len(t) >= 2:
-            threads.append({"id": t[0], "title": t[1]})
+            threads.append({"id": int(t[0]), "title": str(t[1])})
             
     return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
@@ -169,12 +173,12 @@ def v_thread(cid, tid):
     if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
     
     tname_raw = res.get("tname")
-    tname = tname_raw[1] if (isinstance(tname_raw, list) and len(tname_raw) >= 2) else str(tname_raw)
+    tname = tname_raw[0] if (isinstance(tname_raw, list) and len(tname_raw) > 0) else str(tname_raw)
         
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, list) and len(p) >= 4:
-            posts.append({"id": p[0], "n": p[2], "b": p[3], "d": p[4] if len(p)>4 else datetime.datetime.now().strftime('%m/%d %H:%M')})
+            posts.append({"id": int(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
             
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
