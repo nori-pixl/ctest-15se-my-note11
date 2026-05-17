@@ -1,37 +1,11 @@
-import os, mysql.connector, random, datetime
+import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_tunnel_root_perfect_final"
+app.secret_key = "bbs_render_gateway_final_perfect_v16"
 
-def get_db():
-    # ⚠️ ユーザー名を「root」、パスワードを空欄「""」に切り替えてエラー1045を完全に回避します
-    return mysql.connector.connect(
-        host="://trycloudflare.com",
-        port=443,  # 👈 ここをタブレット画面に映っている「5桁の数字」に書き換えてください！
-        user="root",
-        password="",
-        database="bbs_db"
-    )
-
-def init_db():
-    try:
-        with get_db() as conn:
-            with conn.cursor() as cur:
-                cur.execute("CREATE TABLE IF NOT EXISTS classes (id INT PRIMARY KEY, name TEXT)")
-                cur.execute("CREATE TABLE IF NOT EXISTS threads (id INT AUTO_INCREMENT PRIMARY KEY, cid INT, title TEXT)")
-                cur.execute("CREATE TABLE IF NOT EXISTS posts (id INT AUTO_INCREMENT PRIMARY KEY, tid INT, n TEXT, b TEXT, d TEXT)")
-                cur.execute("SELECT count(*) FROM classes WHERE id = 1")
-                if cur.fetchone() == 0:
-                    cur.execute("INSERT INTO classes (id, name) VALUES (1, '一般クラス')")
-            conn.commit()
-    except Exception as e:
-        print(f"DB Init Log: {e}")
-
-try:
-    init_db()
-except:
-    pass
+# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに完全に書き換えました！
+TUNNEL_URL = "https://floppy-locate-football-typically.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -44,6 +18,7 @@ HTML = """
 </style></head>
 <body>
     <h1><a href="/">掲示板メニュー</a></h1><hr>
+    {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {% if v == 'menu' %}
         {% if new_cid %}<div class="box" style="border:2px solid #2196f3;">作成成功！このクラスのID: <b style="font-size:1.4em;">{{new_cid}}</b></div>{% endif %}
@@ -51,9 +26,9 @@ HTML = """
         <ul>
         {% for c in items %}
             <li style="margin-bottom:12px;">
-                <a href="/c/{{c}}"><b>{{c}}</b></a>
-                {% if c != 1 %}
-                <form method="POST" action="/remove_from_list/{{c}}" style="display:inline;margin-left:10px;">
+                <a href="/c/{{c.id}}"><b>{{c.name}}</b></a>
+                {% if c.id != '1' %}
+                <form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
                 {% endif %}
@@ -84,10 +59,11 @@ HTML = """
                 <input type="submit" value="スレッド作成">
             </form>
         </div><hr>
+        <h3>スレ一覧</h3>
         <ul>{% for t in items %}
             <li style="margin-bottom:10px;">
-                <a href="/c/{{cid}}/t/{{t}}">{{t}}</a>
-                <form method="POST" action="/del_t/{{cid}}/{{t}}" style="display:inline;">
+                <a href="/c/{{cid}}/t/{{t.id}}">{{t.title}}</a>
+                <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
             </li>
@@ -101,11 +77,11 @@ HTML = """
         <h2>{{tname}}</h2><a href="/c/{{cid}}">[戻る]</a><hr>
         {% for p in items %}
             <div class="post">
-                {{loop.index}}: <b>{{p}}</b> [{{p}}] <a href="?r={{loop.index}}#f">[返信]</a>
-                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p}}" style="display:inline;">
+                {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="?r={{loop.index}}#f">[返信]</a>
+                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                     <input type="submit" value="消" class="del-btn">
                 </form><br>
-                <div style="white-space:pre-wrap;margin-left:10px;">{{p}}</div>
+                <div style="white-space:pre-wrap;margin-left:10px;">{{p.b}}</div>
             </div>
         {% endfor %}
         <div class="box" id="f">
@@ -119,41 +95,43 @@ HTML = """
 </body></html>
 """
 
+def remote_api(endpoint, payload):
+    try:
+        r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
+        return r.json()
+    except:
+        return {}
+
 @app.route('/')
 def index():
     vlist = request.cookies.get('vlist', '1').split(',')
+    res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            for vid in vlist:
-                if not vid.isdigit(): continue
-                cur.execute("SELECT id, name FROM classes WHERE id=%s", (int(vid),))
-                res = cur.fetchone()
-                if res: items.append(res)
+    for item in res.get("items", []):
+        try:
+            if isinstance(item, list) and len(item) >= 2:
+                items.append({"id": str(item[0]), "name": str(item[1])})
+        except:
+            pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
     fid = request.form.get('fid')
     if not fid or not fid.isdigit(): return redirect('/')
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT id FROM classes WHERE id=%s", (int(fid),))
-            if cur.fetchone():
-                vlist = request.cookies.get('vlist', '1').split(',')
-                if str(fid) not in vlist: vlist.append(str(fid))
-                resp = make_response(redirect('/'))
-                resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
-                return resp
-    return redirect('/')
+    res = remote_api("api/check_class", {"fid": fid})
+    if res.get("exists"):
+        vlist = request.cookies.get('vlist', '1').split(',')
+        if str(fid) not in vlist: vlist.append(str(fid))
+        resp = make_response(redirect('/'))
+        resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
+        return resp
+    flash("そのIDのクラスは見つかりません"); return redirect('/')
 
 @app.route('/add_c', methods=['POST'])
 def add_c():
     nid = random.randint(10000, 99999)
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO classes (id, name) VALUES (%s, %s)", (nid, request.form['cn']))
-        conn.commit()
+    remote_api("api/add_class", {"id": nid, "name": request.form['cn']})
     vlist = request.cookies.get('vlist', '1').split(',')
     vlist.append(str(nid))
     resp = make_response(redirect(url_for('index', new_cid=nid)))
@@ -169,74 +147,62 @@ def remove_from_list(cid):
 @app.route('/c/<int:cid>')
 def v_class(cid):
     sn = request.cookies.get('un', '名無し')
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT name FROM classes WHERE id=%s", (cid,))
-            row = cur.fetchone()
-            if not row: return redirect('/')
-            cname = row
-            cur.execute("SELECT id, title FROM threads WHERE cid=%s ORDER BY id DESC", (cid,))
-            ts = cur.fetchall()
-            items = [t for t in ts] if ts else []
-    return render_template_string(HTML, v='class', cid=cid, cname=cname, items=items, sn=sn)
+    res = remote_api("api/get_class_detail", {"cid": cid})
+    if "error" in res or not res.get("cname"): return redirect('/')
+    
+    cname_data = res.get("cname")
+    cname = str(cname_data[0]) if (isinstance(cname_data, list) and len(cname_data) > 0) else str(cname_data)
+        
+    threads = []
+    for t in res.get("threads", []):
+        if isinstance(t, list) and len(t) >= 2:
+            threads.append({"id": str(t[0]), "title": str(t[1])})
+            
+    return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO threads (cid, title) VALUES (%s, %s)", (cid, request.form['t']))
-            tid = cur.lastrowid
-            cur.execute("INSERT INTO posts (tid, n, b, d) VALUES (%s, %s, %s, %s)", (tid, request.form['n'], request.form['b'], datetime.datetime.now().strftime('%m/%d %H:%M')))
-        conn.commit()
-    resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
+    res = remote_api("api/add_thread", {"cid": cid, "title": request.form['t'], "n": request.form['n'], "b": request.form['b']})
+    tid = res.get("tid")
+    resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid) if tid else url_for('v_class', cid=cid)))
     resp.set_cookie('un', request.form['n']); return resp
 
 @app.route('/c/<int:cid>/t/<int:tid>')
 def v_thread(cid, tid):
     sn = request.cookies.get('un', '名無し')
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("SELECT title FROM threads WHERE id=%s", (tid,))
-            row = cur.fetchone()
-            if not row: return redirect(url_for('v_class', cid=cid))
-            tn = row
-            cur.execute("SELECT id, tid, n, b, d FROM posts WHERE tid=%s ORDER BY id ASC", (tid,))
-            ps = cur.fetchall()
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tn, items=ps, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
+    res = remote_api("api/get_thread_detail", {"tid": tid})
+    if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
+    
+    tname_data = res.get("tname")
+    tname = str(tname_data[0]) if (isinstance(tname_data, list) and len(tname_data) > 0) else str(tname_data)
+        
+    posts = []
+    for p in res.get("posts", []):
+        if isinstance(p, list) and len(p) >= 5:
+            posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4])})
+            
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("INSERT INTO posts (tid, n, b, d) VALUES (%s, %s, %s, %s)", (tid, request.form['n'], request.form['b'], datetime.datetime.now().strftime('%m/%d %H:%M')))
-        conn.commit()
+    remote_api("api/add_post", {"tid": tid, "n": request.form['n'], "b": request.form['b']})
     resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
     resp.set_cookie('un', request.form['n']); return resp
 
 @app.route('/del_c/<int:cid>', methods=['POST'])
 def del_c(cid):
-    if cid == 1: return redirect('/')
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM posts WHERE tid IN (SELECT id FROM threads WHERE cid=%s)", (cid,))
-            cur.execute("DELETE FROM threads WHERE cid=%s", (cid,))
-            cur.execute("DELETE FROM classes WHERE id=%s", (cid,))
-        conn.commit(); return redirect('/')
+    remote_api("api/del_class", {"cid": cid})
+    return redirect('/')
 
 @app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM posts WHERE tid=%s", (tid,))
-            cur.execute("DELETE FROM threads WHERE id=%s", (tid,))
-        conn.commit(); return redirect(url_for('v_class', cid=cid))
+    remote_api("api/del_thread", {"tid": tid})
+    return redirect(url_for('v_class', cid=cid))
 
 @app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("DELETE FROM posts WHERE id=%s", (pid,))
-        conn.commit(); return redirect(url_for('v_thread', cid=cid, tid=tid))
+    remote_api("api/del_post", {"pid": pid})
+    return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
     if not os.environ.get('DATABASE_URL'):
