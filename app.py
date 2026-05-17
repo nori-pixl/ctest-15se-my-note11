@@ -2,10 +2,12 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v8"
+app.secret_key = "bbs_render_gateway_final_perfect_v10"
 
-# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに更新しました
-TUNNEL_URL = "https://trycloudflare.com"
+# ⚠️ 【ここが最重要です！】
+# 今、あなたのタブレット（Termux）の画面の一番下に表示されている
+# 「https://〜〜〜.trycloudflare.com」という長いURLを、以下の "" の中に丸ごと貼り付けてください。
+TUNNEL_URL = "https://expression-bride-cent-howard.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -108,7 +110,7 @@ def index():
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
     
-    # 届いた配列データを文字列型辞書に変換
+    # タブレットから届いた [1, "一般クラス"] などのデータをJinja2が読める辞書型に100%確実に展開
     for item in res.get("items", []):
         try:
             if isinstance(item, list) and len(item) >= 2:
@@ -153,8 +155,13 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     if "error" in res or not res.get("cname"): return redirect('/')
     
-    cname_raw = res.get("cname")
-    cname = cname_raw[0] if isinstance(cname_raw, list) else str(cname_raw)
+    # 届いたデータを安全に1個の文字列として展開（カッコ対策）
+    cname_data = res.get("cname")
+    cname = "不明"
+    if isinstance(cname_data, list) and len(cname_data) > 0:
+        cname = str(cname_data[0])
+    elif cname_data:
+        cname = str(cname_data)
         
     threads = []
     for t in res.get("threads", []):
@@ -176,13 +183,17 @@ def v_thread(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
     if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
     
-    tname_raw = res.get("tname")
-    tname = tname_raw[0] if isinstance(tname_raw, list) else str(tname_raw)
+    tname_data = res.get("tname")
+    tname = "不明"
+    if isinstance(tname_data, list) and len(tname_data) > 0:
+        tname = str(tname_data[0])
+    elif tname_data:
+        tname = str(tname_data)
         
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, list) and len(p) >= 4:
-            posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4]) if len(p)>4 else datetime.datetime.now().strftime('%m/%d %H:%M')})
+            posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
             
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
@@ -208,5 +219,7 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
+    if not os.environ.get('DATABASE_URL'):
+        os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port)
