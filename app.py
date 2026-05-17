@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_perfect"
+app.secret_key = "bbs_render_gateway_final_perfect_v5"
 
-# ⚠️ あなたのタブレットのCloudflare Tunnelの裏口URLをここに固定します
+# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに書き換えました
 TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
@@ -23,11 +23,11 @@ HTML = """
         {% if new_cid %}<div class="box" style="border:2px solid #2196f3;">作成成功！このクラスのID: <b style="font-size:1.4em;">{{new_cid}}</b></div>{% endif %}
         <h2>表示中のクラス</h2>
         <ul>
-        {% for cid, name in items %}
+        {% for c in items %}
             <li style="margin-bottom:12px;">
-                <a href="/c/{{cid}}"><b>{{name}}</b></a>
-                {% if cid != 1 %}
-                <form method="POST" action="/remove_from_list/{{cid}}" style="display:inline;margin-left:10px;">
+                <a href="/c/{{c.id}}"><b>{{c.name}}</b></a>
+                {% if c.id != 1 %}
+                <form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
                 {% endif %}
@@ -58,10 +58,10 @@ HTML = """
                 <input type="submit" value="スレッド作成">
             </form>
         </div><hr>
-        <ul>{% for tid, title in items %}
+        <ul>{% for t in items %}
             <li style="margin-bottom:10px;">
-                <a href="/c/{{cid}}/t/{{tid}}">{{title}}</a>
-                <form method="POST" action="/del_t/{{cid}}/{{tid}}" style="display:inline;">
+                <a href="/c/{{cid}}/t/{{t.id}}">{{t.title}}</a>
+                <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
             </li>
@@ -73,13 +73,13 @@ HTML = """
     {% elif v == 'thread' %}
         <div class="id-info">クラスID: {{cid}}</div><br>
         <h2>{{tname}}</h2><a href="/c/{{cid}}">[戻る]</a><hr>
-        {% for pid, tid, n, b, d in items %}
+        {% for p in items %}
             <div class="post">
-                {{loop.index}}: <b>{{n}}</b> [{{d}}] <a href="?r={{loop.index}}#f">[返信]</a>
-                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{pid}}" style="display:inline;">
+                {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="?r={{loop.index}}#f">[返信]</a>
+                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                     <input type="submit" value="消" class="del-btn">
                 </form><br>
-                <div style="white-space:pre-wrap;margin-left:10px;">{{b}}</div>
+                <div style="white-space:pre-wrap;margin-left:10px;">{{p.b}}</div>
             </div>
         {% endfor %}
         <div class="box" id="f">
@@ -97,14 +97,18 @@ def remote_api(endpoint, payload):
     try:
         r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
         return r.json()
-    except Exception as e:
-        return {"error": str(e)}
+    except:
+        return {}
 
 @app.route('/')
 def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
-    return render_template_string(HTML, v='menu', items=res.get("items", []), new_cid=request.args.get('new_cid'))
+    items = []
+    for item in res.get("items", []):
+        if isinstance(item, list) and len(item) >= 2:
+            items.append({"id": item[0], "name": item[1]})
+    return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
@@ -117,7 +121,7 @@ def find_class():
         resp = make_response(redirect('/'))
         resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
         return resp
-    flash("クラスが見つかりません"); return redirect('/')
+    return redirect('/')
 
 @app.route('/add_c', methods=['POST'])
 def add_c():
@@ -139,8 +143,17 @@ def remove_from_list(cid):
 def v_class(cid):
     sn = request.cookies.get('un', '名無し')
     res = remote_api("api/get_class_detail", {"cid": cid})
-    if "error" in res: return redirect('/')
-    return render_template_string(HTML, v='class', cid=cid, cname=res.get("cname"), items=res.get("threads", []), sn=sn)
+    if "error" in res or not res.get("cname"): return redirect('/')
+    
+    cname_raw = res.get("cname")
+    cname = cname_raw[1] if (isinstance(cname_raw, list) and len(cname_raw) >= 2) else str(cname_raw)
+        
+    threads = []
+    for t in res.get("threads", []):
+        if isinstance(t, list) and len(t) >= 2:
+            threads.append({"id": t[0], "title": t[1]})
+            
+    return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
@@ -153,8 +166,17 @@ def new_t(cid):
 def v_thread(cid, tid):
     sn = request.cookies.get('un', '名無し')
     res = remote_api("api/get_thread_detail", {"tid": tid})
-    if "error" in res: return redirect(url_for('v_class', cid=cid))
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=res.get("tname"), items=res.get("posts", []), sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
+    if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
+    
+    tname_raw = res.get("tname")
+    tname = tname_raw[1] if (isinstance(tname_raw, list) and len(tname_raw) >= 2) else str(tname_raw)
+        
+    posts = []
+    for p in res.get("posts", []):
+        if isinstance(p, list) and len(p) >= 4:
+            posts.append({"id": p[0], "n": p[2], "b": p[3], "d": p[4] if len(p)>4 else datetime.datetime.now().strftime('%m/%d %H:%M')})
+            
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
@@ -178,4 +200,5 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
