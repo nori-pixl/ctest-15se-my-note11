@@ -1,30 +1,33 @@
-import os, psycopg2, random, datetime
+import os, mysql.connector, random, datetime
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_tunnel_direct_perfect"
+app.secret_key = "bbs_termux_tunnel_final"
 
 def get_db():
-    # ⚠️ 【ここをチェックしてください】
-    # もしトンネルサービスから「5桁のポート番号(例: 12345)」が指定されている場合は、
-    # ドメインの末尾を "free-db-tunnel.com:12345" のように数字に書き換えてください。
-    # なければこのままでOKです。
-    url = "postgresql://render_user:my_password123@://free-db-tunnel.com"
-    
-    if url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgres://", 1)
-    return psycopg2.connect(url)
+    # 画面に表示されているCloudflareの本物のトンネルアドレスを直接設定しました
+    return mysql.connector.connect(
+        host="://trycloudflare.com",
+        port=443, # Cloudflare Tunnelのセキュア通信標準ポート
+        user="admin",
+        password="password123",
+        database="bbs_db"
+    )
 
 def init_db():
-    with get_db() as conn:
-        with conn.cursor() as cur:
-            cur.execute("CREATE TABLE IF NOT EXISTS classes (id INT PRIMARY KEY, name TEXT)")
-            cur.execute("CREATE TABLE IF NOT EXISTS threads (id SERIAL PRIMARY KEY, cid INT, title TEXT)")
-            cur.execute("CREATE TABLE IF NOT EXISTS posts (id SERIAL PRIMARY KEY, tid INT, n TEXT, b TEXT, d TEXT)")
-            cur.execute("SELECT count(*) FROM classes WHERE id = 1")
-            if cur.fetchone() == 0:
-                cur.execute("INSERT INTO classes (id, name) VALUES (1, '一般クラス')")
-        conn.commit()
+    # トンネルが開通した状態で、タブレット側に必要なテーブルを自動作成します
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("CREATE TABLE IF NOT EXISTS classes (id INT PRIMARY KEY, name TEXT)")
+                cur.execute("CREATE TABLE IF NOT EXISTS threads (id INT AUTO_INCREMENT PRIMARY KEY, cid INT, title TEXT)")
+                cur.execute("CREATE TABLE IF NOT EXISTS posts (id INT AUTO_INCREMENT PRIMARY KEY, tid INT, n TEXT, b TEXT, d TEXT)")
+                cur.execute("SELECT count(*) FROM classes WHERE id = 1")
+                if cur.fetchone()[0] == 0:
+                    cur.execute("INSERT INTO classes (id, name) VALUES (1, '一般クラス')")
+            conn.commit()
+    except Exception as e:
+        print(f"BBS DB Init Log: {e}")
 
 init_db()
 
@@ -46,9 +49,9 @@ HTML = """
         <ul>
         {% for item in items %}
             <li style="margin-bottom:12px;">
-                <a href="/c/{{item}}"><b>{{item}}</b></a>
-                {% if item != 1 %}
-                <form method="POST" action="/remove_from_list/{{item}}" style="display:inline;margin-left:10px;">
+                <a href="/c/{{item[0]}}"><b>{{item[1]}}</b></a>
+                {% if item[0] != 1 %}
+                <form method="POST" action="/remove_from_list/{{item[0]}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
                 {% endif %}
@@ -81,8 +84,8 @@ HTML = """
         </div><hr>
         <ul>{% for t in items %}
             <li style="margin-bottom:10px;">
-                <a href="/c/{{cid}}/t/{{t}}">{{t}}</a>
-                <form method="POST" action="/del_t/{{cid}}/{{t}}" style="display:inline;">
+                <a href="/c/{{cid}}/t/{{t[0]}}">{{t[2]}}</a>
+                <form method="POST" action="/del_t/{{cid}}/{{t[0]}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
             </li>
@@ -96,11 +99,11 @@ HTML = """
         <h2>{{tname}}</h2><a href="/c/{{cid}}">[戻る]</a><hr>
         {% for p in items %}
             <div class="post">
-                {{loop.index}}: <b>{{p}}</b> [{{p}}] <a href="?r={{loop.index}}#f">[返信]</a>
-                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p}}" style="display:inline;">
+                {{loop.index}}: <b>{{p[2]}}</b> [{{p[4]}}] <a href="?r={{loop.index}}#f">[返信]</a>
+                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p[0]}}" style="display:inline;">
                     <input type="submit" value="消" class="del-btn">
                 </form><br>
-                <div style="white-space:pre-wrap;margin-left:10px;">{{p}}</div>
+                <div style="white-space:pre-wrap;margin-left:10px;">{{p[3]}}</div>
             </div>
         {% endfor %}
         <div class="box" id="f">
@@ -122,9 +125,9 @@ def index():
         with conn.cursor() as cur:
             for vid in vlist:
                 if not vid.isdigit(): continue
-                cur.execute("SELECT name FROM classes WHERE id=%s", (int(vid),))
+                cur.execute("SELECT id, name FROM classes WHERE id=%s", (int(vid),))
                 res = cur.fetchone()
-                if res: items.append(res[0]) # カッコなしで名前だけ取得に固定
+                if res: items.append(res)
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
@@ -169,18 +172,17 @@ def v_class(cid):
             cur.execute("SELECT name FROM classes WHERE id=%s", (cid,))
             row = cur.fetchone()
             if not row: return redirect('/')
-            cname = row[0]
-            cur.execute("SELECT title FROM threads WHERE cid=%s ORDER BY id DESC", (cid,))
+            cname = row[1]
+            cur.execute("SELECT id, cid, title FROM threads WHERE cid=%s ORDER BY id DESC", (cid,))
             ts = cur.fetchall()
-            items = [t[0] for t in ts] if ts else []
-    return render_template_string(HTML, v='class', cid=cid, cname=cname, items=items, sn=sn)
+    return render_template_string(HTML, v='class', cid=cid, cname=cname, items=ts, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("INSERT INTO threads (cid, title) VALUES (%s, %s) RETURNING id", (cid, request.form['t']))
-            tid = cur.fetchone()[0]
+            cur.execute("INSERT INTO threads (cid, title) VALUES (%s, %s)", (cid, request.form['t']))
+            tid = cur.lastrowid
             cur.execute("INSERT INTO posts (tid, n, b, d) VALUES (%s, %s, %s, %s)", (tid, request.form['n'], request.form['b'], datetime.datetime.now().strftime('%m/%d %H:%M')))
         conn.commit()
     resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
@@ -194,11 +196,10 @@ def v_thread(cid, tid):
             cur.execute("SELECT title FROM threads WHERE id=%s", (tid,))
             row = cur.fetchone()
             if not row: return redirect(url_for('v_class', cid=cid))
-            tname = row[0]
-            cur.execute("SELECT n, b, d FROM posts WHERE tid=%s ORDER BY id ASC", (tid,))
+            tname = row[2]
+            cur.execute("SELECT id, tid, n, b, d FROM posts WHERE tid=%s ORDER BY id ASC", (tid,))
             ps = cur.fetchall()
-            items = [[p[0], p[1], p[2]] for p in ps] if ps else []
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=items, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=ps, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
@@ -219,19 +220,19 @@ def del_c(cid):
             cur.execute("DELETE FROM classes WHERE id=%s", (cid,))
         conn.commit(); return redirect('/')
 
-@app.route('/del_t/<int:cid>/<str:title>', methods=['POST'])
-def del_t(cid, title):
+@app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
+def del_t(cid, tid):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM posts WHERE tid IN (SELECT id FROM threads WHERE title=%s AND cid=%s)", (title, cid))
-            cur.execute("DELETE FROM threads WHERE title=%s AND cid=%s", (title, cid))
+            cur.execute("DELETE FROM posts WHERE tid=%s", (tid,))
+            cur.execute("DELETE FROM threads WHERE id=%s", (tid,))
         conn.commit(); return redirect(url_for('v_class', cid=cid))
 
-@app.route('/del_p/<int:cid>/<int:tid>/<str:body>', methods=['POST'])
-def del_p(cid, tid, body):
+@app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
+def del_p(cid, tid, pid):
     with get_db() as conn:
         with conn.cursor() as cur:
-            cur.execute("DELETE FROM posts WHERE tid=%s AND b=%s", (tid, body))
+            cur.execute("DELETE FROM posts WHERE id=%s", (pid,))
         conn.commit(); return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
