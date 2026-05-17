@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v7"
+app.secret_key = "bbs_render_gateway_final_perfect_v8"
 
-# ⚠️ あなたのタブレットの最新のCloudflare Tunnelの裏口URLを設定
+# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに更新しました
 TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
@@ -108,7 +108,7 @@ def index():
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
     
-    # 届いた配列データを最も確実に展開できるように文字列型辞書に変換します
+    # 届いた配列データを文字列型辞書に変換
     for item in res.get("items", []):
         try:
             if isinstance(item, list) and len(item) >= 2:
@@ -153,13 +153,8 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     if "error" in res or not res.get("cname"): return redirect('/')
     
-    # 取得データを確実な文字列にガード
     cname_raw = res.get("cname")
-    cname = "不明"
-    if isinstance(cname_raw, list) and len(cname_raw) > 0:
-        cname = str(cname_raw[0])
-    elif cname_raw:
-        cname = str(cname_raw)
+    cname = cname_raw[0] if isinstance(cname_raw, list) else str(cname_raw)
         
     threads = []
     for t in res.get("threads", []):
@@ -182,16 +177,12 @@ def v_thread(cid, tid):
     if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
     
     tname_raw = res.get("tname")
-    tname = "不明"
-    if isinstance(tname_raw, list) and len(tname_raw) > 0:
-        tname = str(tname_raw[0])
-    elif tname_raw:
-        tname = str(tname_raw)
+    tname = tname_raw[0] if isinstance(tname_raw, list) else str(tname_raw)
         
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, list) and len(p) >= 4:
-            posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
+            posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4]) if len(p)>4 else datetime.datetime.now().strftime('%m/%d %H:%M')})
             
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
