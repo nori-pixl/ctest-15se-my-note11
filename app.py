@@ -7,7 +7,7 @@ app.secret_key = "bbs_pure_tcp_tunnel_final_v2"
 def get_db():
     # ⚠️ 写真に映っている最新のドメイン名に更新しました
     return mysql.connector.connect(
-        host="://trycloudflare.com",
+        host="://governmental-pharmacology-downtown-tell.trycloudflare.com",
         port=443,  # https形式で届いているため、ポートは標準の443で通信を流します
         user="root",
         password="",
