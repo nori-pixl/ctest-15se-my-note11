@@ -2,7 +2,7 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v6"
+app.secret_key = "bbs_render_gateway_final_perfect_v7"
 
 # ⚠️ あなたのタブレットの最新のCloudflare Tunnelの裏口URLを設定
 TUNNEL_URL = "https://trycloudflare.com"
@@ -27,7 +27,7 @@ HTML = """
         {% for c in items %}
             <li style="margin-bottom:12px;">
                 <a href="/c/{{c.id}}"><b>{{c.name}}</b></a>
-                {% if c.id != 1 %}
+                {% if c.id != '1' %}
                 <form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
@@ -107,10 +107,15 @@ def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
-    # タブレットから届く [[1, "一般クラス"]] のような形式を完全に展開
+    
+    # 届いた配列データを最も確実に展開できるように文字列型辞書に変換します
     for item in res.get("items", []):
-        if isinstance(item, list) and len(item) >= 2:
-            items.append({"id": int(item[0]), "name": str(item[1])})
+        try:
+            if isinstance(item, list) and len(item) >= 2:
+                items.append({"id": str(item[0]), "name": str(item[1])})
+        except:
+            pass
+            
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
@@ -148,14 +153,18 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     if "error" in res or not res.get("cname"): return redirect('/')
     
-    # タブレットから届くタプル形式のデータを安全に文字列化
+    # 取得データを確実な文字列にガード
     cname_raw = res.get("cname")
-    cname = cname_raw[0] if (isinstance(cname_raw, list) and len(cname_raw) > 0) else str(cname_raw)
+    cname = "不明"
+    if isinstance(cname_raw, list) and len(cname_raw) > 0:
+        cname = str(cname_raw[0])
+    elif cname_raw:
+        cname = str(cname_raw)
         
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, list) and len(t) >= 2:
-            threads.append({"id": int(t[0]), "title": str(t[1])})
+            threads.append({"id": str(t[0]), "title": str(t[1])})
             
     return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
@@ -173,12 +182,16 @@ def v_thread(cid, tid):
     if "error" in res or not res.get("tname"): return redirect(url_for('v_class', cid=cid))
     
     tname_raw = res.get("tname")
-    tname = tname_raw[0] if (isinstance(tname_raw, list) and len(tname_raw) > 0) else str(tname_raw)
+    tname = "不明"
+    if isinstance(tname_raw, list) and len(tname_raw) > 0:
+        tname = str(tname_raw[0])
+    elif tname_raw:
+        tname = str(tname_raw)
         
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, list) and len(p) >= 4:
-            posts.append({"id": int(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
+            posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
             
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
