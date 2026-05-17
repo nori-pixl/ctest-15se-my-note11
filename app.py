@@ -2,15 +2,15 @@ import os, mysql.connector, random, datetime
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_tunnel_classic_return"
+app.secret_key = "bbs_tunnel_root_perfect_final"
 
 def get_db():
-    # ⚠️ ご指定いただいた最新のCloudflare TunnelのURLへ直接MySQLとして繋ぎ込みます
+    # ⚠️ ユーザー名を「root」、パスワードを空欄「""」に切り替えてエラー1045を完全に回避します
     return mysql.connector.connect(
-        host="expression-bride-cent-howard.trycloudflare.com",
-        port=443,
-        user="admin",
-        password="password123",
+        host="://trycloudflare.com",
+        port=443,  # 👈 ここをタブレット画面に映っている「5桁の数字」に書き換えてください！
+        user="root",
+        password="",
         database="bbs_db"
     )
 
@@ -22,7 +22,7 @@ def init_db():
                 cur.execute("CREATE TABLE IF NOT EXISTS threads (id INT AUTO_INCREMENT PRIMARY KEY, cid INT, title TEXT)")
                 cur.execute("CREATE TABLE IF NOT EXISTS posts (id INT AUTO_INCREMENT PRIMARY KEY, tid INT, n TEXT, b TEXT, d TEXT)")
                 cur.execute("SELECT count(*) FROM classes WHERE id = 1")
-                if cur.fetchone()[0] == 0:
+                if cur.fetchone() == 0:
                     cur.execute("INSERT INTO classes (id, name) VALUES (1, '一般クラス')")
             conn.commit()
     except Exception as e:
@@ -51,9 +51,9 @@ HTML = """
         <ul>
         {% for c in items %}
             <li style="margin-bottom:12px;">
-                <a href="/c/{{c[0]}}"><b>{{c[1]}}</b></a>
-                {% if c[0] != 1 %}
-                <form method="POST" action="/remove_from_list/{{c[0]}}" style="display:inline;margin-left:10px;">
+                <a href="/c/{{c}}"><b>{{c}}</b></a>
+                {% if c != 1 %}
+                <form method="POST" action="/remove_from_list/{{c}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
                 {% endif %}
@@ -86,8 +86,8 @@ HTML = """
         </div><hr>
         <ul>{% for t in items %}
             <li style="margin-bottom:10px;">
-                <a href="/c/{{cid}}/t/{{t[0]}}">{{t[1]}}</a>
-                <form method="POST" action="/del_t/{{cid}}/{{t[0]}}" style="display:inline;">
+                <a href="/c/{{cid}}/t/{{t}}">{{t}}</a>
+                <form method="POST" action="/del_t/{{cid}}/{{t}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
             </li>
@@ -101,11 +101,11 @@ HTML = """
         <h2>{{tname}}</h2><a href="/c/{{cid}}">[戻る]</a><hr>
         {% for p in items %}
             <div class="post">
-                {{loop.index}}: <b>{{p[2]}}</b> [{{p[4]}}] <a href="?r={{loop.index}}#f">[返信]</a>
-                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p[0]}}" style="display:inline;">
+                {{loop.index}}: <b>{{p}}</b> [{{p}}] <a href="?r={{loop.index}}#f">[返信]</a>
+                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p}}" style="display:inline;">
                     <input type="submit" value="消" class="del-btn">
                 </form><br>
-                <div style="white-space:pre-wrap;margin-left:10px;">{{p[3]}}</div>
+                <div style="white-space:pre-wrap;margin-left:10px;">{{p}}</div>
             </div>
         {% endfor %}
         <div class="box" id="f">
@@ -174,7 +174,7 @@ def v_class(cid):
             cur.execute("SELECT name FROM classes WHERE id=%s", (cid,))
             row = cur.fetchone()
             if not row: return redirect('/')
-            cname = row[1]
+            cname = row
             cur.execute("SELECT id, title FROM threads WHERE cid=%s ORDER BY id DESC", (cid,))
             ts = cur.fetchall()
             items = [t for t in ts] if ts else []
@@ -199,7 +199,7 @@ def v_thread(cid, tid):
             cur.execute("SELECT title FROM threads WHERE id=%s", (tid,))
             row = cur.fetchone()
             if not row: return redirect(url_for('v_class', cid=cid))
-            tn = row[1]
+            tn = row
             cur.execute("SELECT id, tid, n, b, d FROM posts WHERE tid=%s ORDER BY id ASC", (tid,))
             ps = cur.fetchall()
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tn, items=ps, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
