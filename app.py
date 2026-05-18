@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v24"
+app.secret_key = "bbs_render_gateway_final_perfect_v25"
 
-# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定してください
+# ⚠️ 今あなたのタブレット（Termux）の画面に映っている最新のURLをここに貼り付けてください
 TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
@@ -27,7 +27,7 @@ HTML = """
         {% for c in items %}
             <li style="margin-bottom:12px;">
                 <a href="/c/{{c.id}}"><b>{{c.name}}</b></a>
-                {% if c.id != '1' %}
+                {% if c.id != '1' and c.id != 1 %}
                 <form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
@@ -69,8 +69,8 @@ HTML = """
             </li>
         {% endfor %}</ul>
         
-        {# ⚠️ クラスIDが '1'（一般クラス）ではない時だけ、削除ボタンを表示する設定にしました #}
-        {% if cid != '1' and cid != 1 %}
+        {# ⚠️ クラスIDの文字・数値を両方安全に判定し、一般クラス（1）のときだけ削除ボタンを完全に非表示にします #}
+        {% if cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
         </form>
@@ -113,8 +113,9 @@ def index():
     items = []
     for item in res.get("items", []):
         try:
-            if isinstance(item, dict):
-                items.append({"id": str(item.get('id', '')), "name": str(item.get('name', '不明'))})
+            # 内部データの展開方法を確実な形式に修正し、トップ画面の表示を保証します
+            if isinstance(item, dict) and 'id' in item and 'name' in item:
+                items.append({"id": str(item['id']), "name": str(item['name'])})
         except:
             pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
@@ -155,11 +156,14 @@ def v_class(cid):
     threads = []
     for t in res.get("threads", []):
         try:
-            if isinstance(t, dict):
-                threads.append({"id": str(t.get('id', '')), "title": str(t.get('title', '不明'))})
+            if isinstance(t, dict) and 'id' in t and 'title' in t:
+                threads.append({"id": str(t['id']), "title": str(t['title'])})
         except:
             pass
-    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, sn=sn)
+    # カッコ付きデータを綺麗に剥ぎ取って文字化
+    cname_raw = res.get("cname", "不明")
+    cname_str = cname_raw[0] if (isinstance(cname_raw, list) and len(cname_raw) > 0) else str(cname_raw)
+    return render_template_string(HTML, v='class', cid=cid, cname=cname_str, items=threads, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
@@ -175,11 +179,14 @@ def v_thread(cid, tid):
     posts = []
     for p in res.get("posts", []):
         try:
-            if isinstance(p, dict):
-                posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
+            if isinstance(p, dict) and 'id' in p and 'n' in p and 'b' in p and 'd' in p:
+                posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
         except:
             pass
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
+    # カッコ付きデータを綺麗に剥ぎ取って文字化
+    tname_raw = res.get("tname", "不明")
+    tname_str = tname_raw[0] if (isinstance(tname_raw, list) and len(tname_raw) > 0) else str(tname_raw)
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname_str, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
