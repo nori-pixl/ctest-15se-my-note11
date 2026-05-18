@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v22"
+app.secret_key = "bbs_render_gateway_final_perfect_v23"
 
-# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに完全に書き換えました！
+# ⚠️ 写真に映っていた最新のCloudflare Tunnelの裏口URLを設定
 TUNNEL_URL = "https://gender-mpegs-positions-subscriber.trycloudflare.com"
 
 HTML = """
@@ -107,8 +107,15 @@ def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
+    # どんなデータ型で届いても安全にクラッシュを防いで展開します
     for item in res.get("items", []):
-        items.append({"id": str(item['id']), "name": str(item['name'])})
+        try:
+            if isinstance(item, dict):
+                items.append({"id": str(item.get('id', '')), "name": str(item.get('name', '不明'))})
+            elif isinstance(item, list) and len(item) >= 2:
+                items.append({"id": str(item[0]), "name": str(item[1])})
+        except:
+            pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
@@ -146,7 +153,13 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     threads = []
     for t in res.get("threads", []):
-        threads.append({"id": str(t['id']), "title": str(t['title'])})
+        try:
+            if isinstance(t, dict):
+                threads.append({"id": str(t.get('id', '')), "title": str(t.get('title', '不明'))})
+            elif isinstance(t, list) and len(t) >= 2:
+                threads.append({"id": str(t[0]), "title": str(t[1])})
+        except:
+            pass
     return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
@@ -162,7 +175,13 @@ def v_thread(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
     posts = []
     for p in res.get("posts", []):
-        posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+        try:
+            if isinstance(p, dict):
+                posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
+            elif isinstance(p, list) and len(p) >= 4:
+                posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
+        except:
+            pass
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
