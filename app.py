@@ -2,10 +2,10 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v21"
+app.secret_key = "bbs_render_gateway_final_perfect_v22"
 
-# ⚠️ 今教えていただいた本物のトンネルURLを一言一句省略せずに設定しました
-TUNNEL_URL = "https://governmental-pharmacology-downtown-tell.trycloudflare.com"
+# ⚠️ 写真に映っている最新のCloudflare Tunnelの裏口URLに完全に書き換えました！
+TUNNEL_URL = "https://gender-mpegs-positions-subscriber.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
