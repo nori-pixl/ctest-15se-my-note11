@@ -2,9 +2,11 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v25"
+app.secret_key = "bbs_render_gateway_final_perfect_v26"
 
-# ⚠️ 今あなたのタブレット（Termux）の画面に映っている最新のURLをここに貼り付けてください
+# ⚠️ 【ここが最重要！】
+# 今、あなたのタブレット（Termux）の画面に映っている最新の緑色のURL
+# （https://〜〜〜.trycloudflare.com）を、以下の "" の中に丸ごと貼り付けてください！
 TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
@@ -27,7 +29,7 @@ HTML = """
         {% for c in items %}
             <li style="margin-bottom:12px;">
                 <a href="/c/{{c.id}}"><b>{{c.name}}</b></a>
-                {% if c.id != '1' and c.id != 1 %}
+                {% if c.id != '1' %}
                 <form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
@@ -68,13 +70,9 @@ HTML = """
                 </form>
             </li>
         {% endfor %}</ul>
-        
-        {# ⚠️ クラスIDの文字・数値を両方安全に判定し、一般クラス（1）のときだけ削除ボタンを完全に非表示にします #}
-        {% if cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
         </form>
-        {% endif %}
 
     {% elif v == 'thread' %}
         <div class="id-info">クラスID: {{cid}}</div><br>
@@ -112,12 +110,7 @@ def index():
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
     for item in res.get("items", []):
-        try:
-            # 内部データの展開方法を確実な形式に修正し、トップ画面の表示を保証します
-            if isinstance(item, dict) and 'id' in item and 'name' in item:
-                items.append({"id": str(item['id']), "name": str(item['name'])})
-        except:
-            pass
+        items.append({"id": str(item['id']), "name": str(item['name'])})
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
@@ -155,15 +148,8 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     threads = []
     for t in res.get("threads", []):
-        try:
-            if isinstance(t, dict) and 'id' in t and 'title' in t:
-                threads.append({"id": str(t['id']), "title": str(t['title'])})
-        except:
-            pass
-    # カッコ付きデータを綺麗に剥ぎ取って文字化
-    cname_raw = res.get("cname", "不明")
-    cname_str = cname_raw[0] if (isinstance(cname_raw, list) and len(cname_raw) > 0) else str(cname_raw)
-    return render_template_string(HTML, v='class', cid=cid, cname=cname_str, items=threads, sn=sn)
+        threads.append({"id": str(t['id']), "title": str(t['title'])})
+    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
@@ -178,15 +164,8 @@ def v_thread(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
     posts = []
     for p in res.get("posts", []):
-        try:
-            if isinstance(p, dict) and 'id' in p and 'n' in p and 'b' in p and 'd' in p:
-                posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-        except:
-            pass
-    # カッコ付きデータを綺麗に剥ぎ取って文字化
-    tname_raw = res.get("tname", "不明")
-    tname_str = tname_raw[0] if (isinstance(tname_raw, list) and len(tname_raw) > 0) else str(tname_raw)
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=tname_str, items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
+        posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
