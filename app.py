@@ -2,14 +2,14 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v23"
+app.secret_key = "bbs_render_gateway_final_perfect_v24"
 
-# ⚠️ 写真に映っていた最新のCloudflare Tunnelの裏口URLを設定
-TUNNEL_URL = "https://gender-mpegs-positions-subscriber.trycloudflare.com"
+# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定してください
+TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>mynote ver1.0 掲示板</title><style>
+<title>秘密の掲示板</title><style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
     .post{border-bottom:1px solid #ccc;padding:10px 0;}
@@ -17,7 +17,7 @@ HTML = """
     .id-info{background:#e3f2fd; color:#1565c0; padding:5px; border-radius:3px; font-weight:bold; display:inline-block; margin-bottom:10px;}
 </style></head>
 <body>
-    <h1><a href="/">mynote ver1.0 掲示板メニュー</a></h1><hr>
+    <h1><a href="/">掲示板メニュー</a></h1><hr>
     {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {% if v == 'menu' %}
@@ -68,9 +68,13 @@ HTML = """
                 </form>
             </li>
         {% endfor %}</ul>
+        
+        {# ⚠️ クラスIDが '1'（一般クラス）ではない時だけ、削除ボタンを表示する設定にしました #}
+        {% if cid != '1' and cid != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
         </form>
+        {% endif %}
 
     {% elif v == 'thread' %}
         <div class="id-info">クラスID: {{cid}}</div><br>
@@ -107,13 +111,10 @@ def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
     items = []
-    # どんなデータ型で届いても安全にクラッシュを防いで展開します
     for item in res.get("items", []):
         try:
             if isinstance(item, dict):
                 items.append({"id": str(item.get('id', '')), "name": str(item.get('name', '不明'))})
-            elif isinstance(item, list) and len(item) >= 2:
-                items.append({"id": str(item[0]), "name": str(item[1])})
         except:
             pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
@@ -156,8 +157,6 @@ def v_class(cid):
         try:
             if isinstance(t, dict):
                 threads.append({"id": str(t.get('id', '')), "title": str(t.get('title', '不明'))})
-            elif isinstance(t, list) and len(t) >= 2:
-                threads.append({"id": str(t[0]), "title": str(t[1])})
         except:
             pass
     return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, sn=sn)
@@ -178,8 +177,6 @@ def v_thread(cid, tid):
         try:
             if isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
-            elif isinstance(p, list) and len(p) >= 4:
-                posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
         except:
             pass
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
