@@ -2,7 +2,7 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v71_divided"
+app.secret_key = "bbs_render_gateway_final_perfect_v72_fixed"
 
 # ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
@@ -108,7 +108,7 @@ HTML = """
             </div>
         {% endfor %}
 
-    {# ------------------ 5. 【新規】コメントを書き込むための専用画面 ------------------ #}
+    {# ------------------ 5. コメントを書き込むための専用画面 ------------------ #}
     {% elif v == 'post_form' %}
         <h2>コメント書き込み</h2>
         <a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">⬅ スレに戻る</a>
@@ -216,15 +216,15 @@ def v_thread(cid, tid):
     posts = []
     for p in res.get("posts", []):
         try:
-            if isinstance(p, dict):
+            # 💡 タブレットから届く [id, tid, n, b, d] の5つの要素(配列)から名前、本文、日付を100%正確に抜き出します
+            if isinstance(p, list) and len(p) >= 5:
+                posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4])})
+            elif isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
-            elif isinstance(p, list) and len(p) >= 4:
-                posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p) if len(p)>3 else ""})
         except:
             pass
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn)
 
-# 💡 コメント書き込み専用画面を表示するルーティング
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
     sn = request.cookies.get('un', '名無し')
