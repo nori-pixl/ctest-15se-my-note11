@@ -5,7 +5,7 @@ app = Flask(__name__)
 app.secret_key = "bbs_render_gateway_final_perfect_v27"
 
 # ⚠️ 今発行された最新の本物トンネルURLを一言一句間違いなく設定しました！
-TUNNEL_URL = "https://trycloudflare.com"
+TUNNEL_URL = "https://vid-seconds-fire-floors.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
