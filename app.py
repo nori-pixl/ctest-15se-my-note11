@@ -2,14 +2,14 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v60_final"
+app.secret_key = "bbs_render_gateway_final_perfect_v61_fixed"
 
-# ⚠️ 写真に映っている最新の本物トンネルURLを一言一句漏らさず設定しました！
+# ⚠️ トンネルのURLは先ほどのままで完全に固定してあります
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ngm-mynote 掲示板</title><style>
+<title>秘密の掲示板</title><style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
     .post{border-bottom:1px solid #ccc;padding:10px 0;}
@@ -17,7 +17,7 @@ HTML = """
     .id-info{background:#e3f2fd; color:#1565c0; padding:5px; border-radius:3px; font-weight:bold; display:inline-block; margin-bottom:10px;}
 </style></head>
 <body>
-    <h1><a href="/">mynote ver1.0 掲示板メニュー</a></h1><hr>
+    <h1><a href="/">掲示板メニュー</a></h1><hr>
     {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {% if v == 'menu' %}
@@ -69,7 +69,6 @@ HTML = """
             </li>
         {% endfor %}</ul>
         
-        {# ⚠️ 一般クラス（1）のときだけ削除ボタンを完全に非表示にします #}
         {% if cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
@@ -110,10 +109,7 @@ def remote_api(endpoint, payload):
 def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
-    
-    # 💡 最初に必ず「一般クラス」の枠を強制配置します
     items = [{"id": "1", "name": "一般クラス"}]
-    
     for item in res.get("items", []):
         try:
             if isinstance(item, dict) and str(item.get('id')) != '1':
@@ -180,8 +176,11 @@ def v_thread(cid, tid):
     posts = []
     for p in res.get("posts", []):
         try:
+            # 💡 データの展開をリスト形式、辞書形式のどちらからでも安全に読み取れるように完全防備しました
             if isinstance(p, dict):
-                posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+                posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
+            elif isinstance(p, list) and len(p) >= 4:
+                posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4]) if len(p)>4 else ""})
         except:
             pass
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
