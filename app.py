@@ -2,7 +2,7 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v70_divided"
+app.secret_key = "bbs_render_gateway_final_perfect_v71_divided"
 
 # ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
@@ -74,7 +74,7 @@ HTML = """
         </form>
         {% endif %}
 
-    {# ------------------ 3. 【新規】スレを作るための専用画面 ------------------ #}
+    {# ------------------ 3. スレを作るための専用画面 ------------------ #}
     {% elif v == 'create_form' %}
         <h2>新規スレッド作成</h2>
         <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
@@ -89,31 +89,37 @@ HTML = """
             </form>
         </div>
 
-    {# ------------------ 4. 投稿とコメントを表示・書き込む画面 ------------------ #}
+    {# ------------------ 4. 投稿一覧を表示する専用画面 ------------------ #}
     {% elif v == 'thread' %}
         <div class="id-info">クラスID: {{cid}}</div><br>
         <h2>スレッド: {{tname}}</h2>
         <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
+        <a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">✍️ このスレに書き込む</a>
         <hr>
         
         <h3>投稿一覧</h3>
         {% for p in items %}
             <div class="post">
-                {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="?r={{loop.index}}#f">[返信]</a>
+                {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="/c/{{cid}}/t/{{tid}}/post_form?r={{loop.index}}">[返信]</a>
                 <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                     <input type="submit" value="消" class="del-btn">
                 </form><br>
                 <div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>
             </div>
         {% endfor %}
-        
-        <div class="box" id="f" style="border:1px solid #2196f3;margin-top:20px;">
-            <h4>💬 このスレにコメントする</h4>
+
+    {# ------------------ 5. 【新規】コメントを書き込むための専用画面 ------------------ #}
+    {% elif v == 'post_form' %}
+        <h2>コメント書き込み</h2>
+        <a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">⬅ スレに戻る</a>
+        <hr>
+        <div class="box" style="border:2px solid #2196f3;">
+            <h4>スレ「{{tname}}」への返信</h4>
             <form method="POST" action="/c/{{cid}}/t/{{tid}}/p">
-                名: <input name="n" value="{{sn}}"><br><br>
-                本文:<br>
-                <textarea name="b" required style="width:95%;height:80px;">{{r_txt}}</textarea><br><br>
-                <input type="submit" value="書き込む">
+                <b>お名前:</b><br><input name="n" value="{{sn}}" style="width:95%;padding:5px;"><br><br>
+                <b>コメント本文:</b><br>
+                <textarea name="b" required style="width:95%;height:120px;padding:5px;">{{r_txt}}</textarea><br><br>
+                <input type="submit" value="💬 書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;">
             </form>
         </div>
     {% endif %}
@@ -184,7 +190,6 @@ def v_class(cid):
     cname = "一般クラス" if str(cid) == '1' else str(res.get("cname", "不明"))
     return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
-# 💡 新規スレ作成画面を表示するルーティング
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
     sn = request.cookies.get('un', '名無し')
@@ -217,7 +222,16 @@ def v_thread(cid, tid):
                 posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p) if len(p)>3 else ""})
         except:
             pass
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn)
+
+# 💡 コメント書き込み専用画面を表示するルーティング
+@app.route('/c/<int:cid>/t/<int:tid>/post_form')
+def post_form(cid, tid):
+    sn = request.cookies.get('un', '名無し')
+    res = remote_api("api/get_thread_detail", {"tid": tid})
+    r = request.args.get("r")
+    r_txt = f'>>{r}\\n' if r else ""
+    return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), sn=sn, r_txt=r_txt)
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
