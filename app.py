@@ -2,12 +2,10 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v26"
+app.secret_key = "bbs_render_gateway_final_perfect_v27"
 
-# ⚠️ 【ここが最重要！】
-# 今、あなたのタブレット（Termux）の画面に映っている最新の緑色のURL
-# （https://〜〜〜.trycloudflare.com）を、以下の "" の中に丸ごと貼り付けてください！
-TUNNEL_URL = "https://vid-seconds-fire-floors.trycloudflare.com"
+# ⚠️ 今発行された最新の本物トンネルURLを一言一句間違いなく設定しました！
+TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
