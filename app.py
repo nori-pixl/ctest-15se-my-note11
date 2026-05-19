@@ -2,11 +2,10 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v50"
+app.secret_key = "bbs_render_gateway_final_perfect_v60_final"
 
-# ⚠️ 【ここが最重要！】
-# タブレットのTermux画面に映っている最新の緑色のURL（https://〜〜〜.trycloudflare.com）を丸ごと貼り付けてください
-TUNNEL_URL = "https://trycloudflare.com"
+# ⚠️ 写真に映っている最新の本物トンネルURLを一言一句漏らさず設定しました！
+TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -70,7 +69,7 @@ HTML = """
             </li>
         {% endfor %}</ul>
         
-        {# 一般クラス（1）のときだけ削除ボタンを完全に非表示にします #}
+        {# ⚠️ 一般クラス（1）のときだけ削除ボタンを完全に非表示にします #}
         {% if cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
@@ -112,10 +111,9 @@ def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
     
-    # 💡 最初に必ず「一般クラス」の枠を強制配置します！
+    # 💡 最初に必ず「一般クラス」の枠を強制配置します
     items = [{"id": "1", "name": "一般クラス"}]
     
-    # あとはタブレットから届いた追加分のクラスだけを後ろにくっつけます
     for item in res.get("items", []):
         try:
             if isinstance(item, dict) and str(item.get('id')) != '1':
