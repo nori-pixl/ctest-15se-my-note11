@@ -2,10 +2,11 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v27"
+app.secret_key = "bbs_render_gateway_final_perfect_v50"
 
-# ⚠️ 今発行された最新の本物トンネルURLを一言一句間違いなく設定しました！
-TUNNEL_URL = "https://vid-seconds-fire-floors.trycloudflare.com"
+# ⚠️ 【ここが最重要！】
+# タブレットのTermux画面に映っている最新の緑色のURL（https://〜〜〜.trycloudflare.com）を丸ごと貼り付けてください
+TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -27,7 +28,7 @@ HTML = """
         {% for c in items %}
             <li style="margin-bottom:12px;">
                 <a href="/c/{{c.id}}"><b>{{c.name}}</b></a>
-                {% if c.id != '1' %}
+                {% if c.id != '1' and c.id != 1 %}
                 <form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;">
                     <input type="submit" value="非表示" style="font-size:0.7em;">
                 </form>
@@ -68,9 +69,13 @@ HTML = """
                 </form>
             </li>
         {% endfor %}</ul>
+        
+        {# 一般クラス（1）のときだけ削除ボタンを完全に非表示にします #}
+        {% if cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
         </form>
+        {% endif %}
 
     {% elif v == 'thread' %}
         <div class="id-info">クラスID: {{cid}}</div><br>
@@ -100,21 +105,30 @@ def remote_api(endpoint, payload):
         r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
         return r.json()
     except:
-        return {"items": [], "threads": [], "posts": [], "cname": "不明", "tname": "不明"}
+        return {"items": [], "threads": [], "posts": [], "cname": "一般クラス", "tname": "不明"}
 
 @app.route('/')
 def index():
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
-    items = []
+    
+    # 💡 最初に必ず「一般クラス」の枠を強制配置します！
+    items = [{"id": "1", "name": "一般クラス"}]
+    
+    # あとはタブレットから届いた追加分のクラスだけを後ろにくっつけます
     for item in res.get("items", []):
-        items.append({"id": str(item['id']), "name": str(item['name'])})
+        try:
+            if isinstance(item, dict) and str(item.get('id')) != '1':
+                items.append({"id": str(item['id']), "name": str(item['name'])})
+        except:
+            pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
     fid = request.form.get('fid')
     if not fid or not fid.isdigit(): return redirect('/')
+    if str(fid) == '1': return redirect('/')
     res = remote_api("api/check_class", {"fid": fid})
     if res.get("exists"):
         vlist = request.cookies.get('vlist', '1').split(',')
@@ -146,8 +160,13 @@ def v_class(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     threads = []
     for t in res.get("threads", []):
-        threads.append({"id": str(t['id']), "title": str(t['title'])})
-    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, sn=sn)
+        try:
+            if isinstance(t, dict):
+                threads.append({"id": str(t['id']), "title": str(t['title'])})
+        except:
+            pass
+    cname = "一般クラス" if str(cid) == '1' else str(res.get("cname", "不明"))
+    return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
@@ -162,7 +181,11 @@ def v_thread(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
     posts = []
     for p in res.get("posts", []):
-        posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+        try:
+            if isinstance(p, dict):
+                posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+        except:
+            pass
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
@@ -173,6 +196,7 @@ def post(cid, tid):
 
 @app.route('/del_c/<int:cid>', methods=['POST'])
 def del_c(cid):
+    if str(cid) == '1': return redirect('/')
     remote_api("api/del_class", {"cid": cid})
     return redirect('/')
 
