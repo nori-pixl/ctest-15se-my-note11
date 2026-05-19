@@ -7,7 +7,7 @@ app.secret_key = "bbs_render_gateway_final_perfect_v26"
 # ⚠️ 【ここが最重要！】
 # 今、あなたのタブレット（Termux）の画面に映っている最新の緑色のURL
 # （https://〜〜〜.trycloudflare.com）を、以下の "" の中に丸ごと貼り付けてください！
-TUNNEL_URL = "https://trycloudflare.com"
+TUNNEL_URL = "https://vid-seconds-fire-floors.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
