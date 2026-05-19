@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v61_fixed"
+app.secret_key = "bbs_render_gateway_final_perfect_v70_divided"
 
-# ⚠️ トンネルのURLは先ほどのままで完全に固定してあります
+# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 
 HTML = """
@@ -15,11 +15,13 @@ HTML = """
     .post{border-bottom:1px solid #ccc;padding:10px 0;}
     .del-btn{background:#ffcccc;cursor:pointer;font-size:0.7em;border:1px solid #999;float:right;}
     .id-info{background:#e3f2fd; color:#1565c0; padding:5px; border-radius:3px; font-weight:bold; display:inline-block; margin-bottom:10px;}
+    .nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}
 </style></head>
 <body>
     <h1><a href="/">掲示板メニュー</a></h1><hr>
     {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
+    {# ------------------ 1. トップメニュー画面 ------------------ #}
     {% if v == 'menu' %}
         {% if new_cid %}<div class="box" style="border:2px solid #2196f3;">作成成功！このクラスのID: <b style="font-size:1.4em;">{{new_cid}}</b></div>{% endif %}
         <h2>表示中のクラス</h2>
@@ -49,20 +51,17 @@ HTML = """
             </form>
         </div>
 
+    {# ------------------ 2. スレ一覧を表示する画面 ------------------ #}
     {% elif v == 'class' %}
         <div class="id-info">このクラスのID: {{cid}}</div><br>
-        <h2>クラス: {{cname}}</h2><a href="/">[戻る]</a><hr>
-        <div class="box">
-            <form method="POST" action="/c/{{cid}}/new">
-                タイ: <input name="t" required> 名: <input name="n" value="{{sn}}"><br>
-                本文: <textarea name="b" required style="width:95%;height:50px;"></textarea><br>
-                <input type="submit" value="スレッド作成">
-            </form>
-        </div><hr>
+        <h2>クラス: {{cname}}</h2>
+        <a href="/" class="nav-btn">⬅ メニューに戻る</a>
+        <a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">➕ 新規スレ作成画面へ</a>
+        <hr>
         <h3>スレ一覧</h3>
         <ul>{% for t in items %}
-            <li style="margin-bottom:10px;">
-                <a href="/c/{{cid}}/t/{{t.id}}">{{t.title}}</a>
+            <li style="margin-bottom:12px;font-size:1.1em;">
+                👉 <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
                 <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
@@ -75,22 +74,45 @@ HTML = """
         </form>
         {% endif %}
 
+    {# ------------------ 3. 【新規】スレを作るための専用画面 ------------------ #}
+    {% elif v == 'create_form' %}
+        <h2>新規スレッド作成</h2>
+        <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
+        <hr>
+        <div class="box" style="border:2px solid #4caf50;">
+            <form method="POST" action="/c/{{cid}}/new">
+                <b>タイトル:</b><br><input name="t" required style="width:95%;padding:5px;"><br><br>
+                <b>お名前:</b><br><input name="n" value="{{sn}}" style="width:95%;padding:5px;"><br><br>
+                <b>最初の本文:</b><br>
+                <textarea name="b" required style="width:95%;height:100px;padding:5px;"></textarea><br><br>
+                <input type="submit" value="🚀 この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;">
+            </form>
+        </div>
+
+    {# ------------------ 4. 投稿とコメントを表示・書き込む画面 ------------------ #}
     {% elif v == 'thread' %}
         <div class="id-info">クラスID: {{cid}}</div><br>
-        <h2>{{tname}}</h2><a href="/c/{{cid}}">[戻る]</a><hr>
+        <h2>スレッド: {{tname}}</h2>
+        <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
+        <hr>
+        
+        <h3>投稿一覧</h3>
         {% for p in items %}
             <div class="post">
                 {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="?r={{loop.index}}#f">[返信]</a>
                 <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                     <input type="submit" value="消" class="del-btn">
                 </form><br>
-                <div style="white-space:pre-wrap;margin-left:10px;">{{p.b}}</div>
+                <div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>
             </div>
         {% endfor %}
-        <div class="box" id="f">
+        
+        <div class="box" id="f" style="border:1px solid #2196f3;margin-top:20px;">
+            <h4>💬 このスレにコメントする</h4>
             <form method="POST" action="/c/{{cid}}/t/{{tid}}/p">
-                名: <input name="n" value="{{sn}}"><br>
-                <textarea name="b" required style="width:95%;height:80px;">{{r_txt}}</textarea><br>
+                名: <input name="n" value="{{sn}}"><br><br>
+                本文:<br>
+                <textarea name="b" required style="width:95%;height:80px;">{{r_txt}}</textarea><br><br>
                 <input type="submit" value="書き込む">
             </form>
         </div>
@@ -162,9 +184,22 @@ def v_class(cid):
     cname = "一般クラス" if str(cid) == '1' else str(res.get("cname", "不明"))
     return render_template_string(HTML, v='class', cid=cid, cname=cname, items=threads, sn=sn)
 
+# 💡 新規スレ作成画面を表示するルーティング
+@app.route('/c/<int:cid>/create_form')
+def create_form(cid):
+    sn = request.cookies.get('un', '名無し')
+    return render_template_string(HTML, v='create_form', cid=cid, sn=sn)
+
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
-    res = remote_api("api/add_thread", {"cid": cid, "title": request.form['t'], "n": request.form['n'], "b": request.form['b']})
+    now_str = datetime.datetime.now().strftime('%m/%d %H:%M')
+    res = remote_api("api/add_thread", {
+        "cid": cid, 
+        "title": request.form['t'], 
+        "n": request.form['n'], 
+        "b": request.form['b'],
+        "d": now_str
+    })
     tid = res.get("tid")
     resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid) if tid else url_for('v_class', cid=cid)))
     resp.set_cookie('un', request.form['n']); return resp
@@ -176,18 +211,23 @@ def v_thread(cid, tid):
     posts = []
     for p in res.get("posts", []):
         try:
-            # 💡 データの展開をリスト形式、辞書形式のどちらからでも安全に読み取れるように完全防備しました
             if isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
             elif isinstance(p, list) and len(p) >= 4:
-                posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4]) if len(p)>4 else ""})
+                posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p) if len(p)>3 else ""})
         except:
             pass
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, sn=sn, r_txt=f'>>{request.args.get("r")}\\n' if request.args.get("r") else "")
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
-    remote_api("api/add_post", {"tid": tid, "n": request.form['n'], "b": request.form['b']})
+    now_str = datetime.datetime.now().strftime('%m/%d %H:%M')
+    remote_api("api/add_post", {
+        "tid": tid, 
+        "n": request.form['n'], 
+        "b": request.form['b'],
+        "d": now_str
+    })
     resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
     resp.set_cookie('un', request.form['n']); return resp
 
