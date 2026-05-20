@@ -10,6 +10,8 @@ TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ngm-mynote ver2.4 掲示板</title>
+<link rel="icon" href="icon.png" type="image/x-icon">
+
 <style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
