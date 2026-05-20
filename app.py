@@ -9,7 +9,7 @@ TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>秘密の掲示板</title>
+<title>ngm-mynote ver2.4 掲示板</title>
 <style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
@@ -69,7 +69,7 @@ HTML = """
 
 </head>
 <body>
-    <h1><a href="/">掲示板メニュー</a></h1><hr>
+    <h1><a href="/">mynote ver2.4 掲示板メニュー</a></h1><hr>
     {# 💡 タイポを完全に修正しました！ #}
     {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
@@ -107,13 +107,13 @@ HTML = """
     {% elif v == 'class' %}
         <div class="id-info">このクラスのID: {{cid}}</div><br>
         <h2>クラス: {{cname}}</h2>
-        <a href="/" class="nav-btn">⬅ メニューに戻る</a>
-        <a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">➕ 新規スレ作成画面へ</a>
+        <a href="/" class="nav-btn">メニューに戻る</a>
+        <a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">新規スレ作成画面へ</a>
         <hr>
         <h3>スレ一覧</h3>
         <ul>{% for t in items %}
             <li style="margin-bottom:12px;font-size:1.1em;">
-                👉 <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
+                => <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
                 <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
@@ -129,7 +129,7 @@ HTML = """
     {# ------------------ 3. スレを作るための専用画面 ------------------ #}
     {% elif v == 'create_form' %}
         <h2>新規スレッド作成</h2>
-        <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
+        <a href="/c/{{cid}}" class="nav-btn">スレ一覧に戻る</a>
         <hr>
         <div class="box" style="border:2px solid #4caf50;">
             <form method="POST" action="/c/{{cid}}/new">
@@ -137,7 +137,7 @@ HTML = """
                 <b>お名前:</b><br><input name="n" value="{{sn}}" style="width:95%;padding:5px;"><br><br>
                 <b>最初の本文:</b><br>
                 <textarea name="b" required style="width:95%;height:100px;padding:5px;"></textarea><br><br>
-                <input type="submit" value="🚀 この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;">
+                <input type="submit" value="この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;">
             </form>
         </div>
 
@@ -146,7 +146,7 @@ HTML = """
         <div class="id-info">クラスID: {{cid}}</div><br>
         <h2>スレッド: {{tname}}</h2>
         <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
-        <a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">✍️ このスレに書き込む</a>
+        <a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">このスレに書き込む</a>
         <hr>
         
         <h3>投稿一覧 <span style="font-size:0.7em;color:#4caf50;">● リアルタイム自動【追加】モード中</span></h3>
@@ -166,7 +166,7 @@ HTML = """
     {# ------------------ 5. コメントを書き込むための専用画面 ------------------ #}
     {% elif v == 'post_form' %}
         <h2>コメント書き込み</h2>
-        <a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">⬅ スレに戻る</a>
+        <a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">スレに戻る</a>
         <hr>
         <div class="box" style="border:2px solid #2196f3;">
             <h4>スレ「{{tname}}」への返信</h4>
@@ -174,7 +174,7 @@ HTML = """
                 <b>お名前:</b><br><input name="n" value="{{sn}}" style="width:95%;padding:5px;"><br><br>
                 <b>コメント本文:</b><br>
                 <textarea name="b" required style="width:95%;height:120px;padding:5px;">{{r_txt}}</textarea><br><br>
-                <input type="submit" value="💬 書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;">
+                <input type="submit" value="書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;">
             </form>
         </div>
     {% endif %}
