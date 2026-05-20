@@ -1,24 +1,62 @@
 import os, random, datetime, requests
-from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash
+from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
+from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v72_fixed"
+app.secret_key = "bbs_render_gateway_websocket_pure_append_v1"
+socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
 
-# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定
+# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ngm-mynote 掲示板</title><style>
+<title>秘密の掲示板</title>
+<script src="https://socketio.org"></script>
+<style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
     .post{border-bottom:1px solid #ccc;padding:10px 0;}
     .del-btn{background:#ffcccc;cursor:pointer;font-size:0.7em;border:1px solid #999;float:right;}
     .id-info{background:#e3f2fd; color:#1565c0; padding:5px; border-radius:3px; font-weight:bold; display:inline-block; margin-bottom:10px;}
     .nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}
-</style></head>
+</style>
+
+{# 💡 スレ内画面（thread）のときだけ、WebSocketのリアルタイム追加Javascriptを起動します #}
+{% if v == 'thread' %}
+<script>
+    var socket = io();
+    socket.emit('join_thread', {tid: '{{tid}}'});
+
+    // 💡 誰かが投稿した瞬間に、その「書き込まれた中身」を直接電波でキャッチします！
+    socket.on('append_new_post', function(data) {
+        var container = document.getElementById('posts-container');
+        
+        // 💡 画面の書き換え（全入れ替え）を完全にやめました！
+        // 新しい投稿用のブロックをその場で1個作り、中身を組み立てます
+        var newPostDiv = document.createElement('div');
+        newPostDiv.className = 'post';
+        
+        // 何番目の書き込みか（現在の数 + 1）を計算
+        var currentCount = container.getElementsByClassName('post').length + 1;
+        
+        newPostDiv.innerHTML = 
+            currentCount + ': <b>' + data.n + '</b> [' + data.d + '] ' +
+            '<a href="/c/{{cid}}/t/{{tid}}/post_form?r=' + currentCount + '">[返信]</a>' +
+            '<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + data.id + '" style="display:inline;">' +
+            '<input type="submit" value="消" class="del-btn">' +
+            '</form><br>' +
+            '<div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">' + data.b + '</div>';
+            
+        // 💡 今あるリストの「一番下」に、新しい文字ブロックだけをそっと滑り込ませて【追加】します！
+        container.appendChild(newPostDiv);
+    });
+</script>
+{% endif %}
+
+</head>
 <body>
-    <h1><a href="/">mynote ver1.7 掲示板メニュー</a></h1><hr>
+    <h1><a href="/">掲示板メニュー</a></h1><hr>
     {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {# ------------------ 1. トップメニュー画面 ------------------ #}
@@ -55,13 +93,13 @@ HTML = """
     {% elif v == 'class' %}
         <div class="id-info">このクラスのID: {{cid}}</div><br>
         <h2>クラス: {{cname}}</h2>
-        <a href="/" class="nav-btn">メニューに戻る</a>
-        <a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">新規スレ作成画面へ</a>
+        <a href="/" class="nav-btn">⬅ メニューに戻る</a>
+        <a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">➕ 新規スレ作成画面へ</a>
         <hr>
         <h3>スレ一覧</h3>
         <ul>{% for t in items %}
             <li style="margin-bottom:12px;font-size:1.1em;">
-                => <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
+                👉 <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
                 <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
@@ -85,7 +123,7 @@ HTML = """
                 <b>お名前:</b><br><input name="n" value="{{sn}}" style="width:95%;padding:5px;"><br><br>
                 <b>最初の本文:</b><br>
                 <textarea name="b" required style="width:95%;height:100px;padding:5px;"></textarea><br><br>
-                <input type="submit" value="この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;">
+                <input type="submit" value="🚀 この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;">
             </form>
         </div>
 
@@ -94,19 +132,22 @@ HTML = """
         <div class="id-info">クラスID: {{cid}}</div><br>
         <h2>スレッド: {{tname}}</h2>
         <a href="/c/{{cid}}" class="nav-btn">⬅ スレ一覧に戻る</a>
-        <a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">このスレに書き込む</a>
+        <a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">✍️ このスレに書き込む</a>
         <hr>
         
-        <h3>投稿一覧</h3>
-        {% for p in items %}
-            <div class="post">
-                {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="/c/{{cid}}/t/{{tid}}/post_form?r={{loop.index}}">[返信]</a>
-                <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
-                    <input type="submit" value="消" class="del-btn">
-                </form><br>
-                <div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>
-            </div>
-        {% endfor %}
+        <h3>投稿一覧 <span style="font-size:0.7em;color:#ff5722;">● リアルタイム即時【追加】モード</span></h3>
+        
+        <div id="posts-container">
+            {% for p in items %}
+                <div class="post">
+                    {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="/c/{{cid}}/t/{{tid}}/post_form?r={{loop.index}}">[返信]</a>
+                    <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
+                        <input type="submit" value="消" class="del-btn">
+                    </form><br>
+                    <div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>
+                </div>
+            {% endfor %}
+        </div>
 
     {# ------------------ 5. コメントを書き込むための専用画面 ------------------ #}
     {% elif v == 'post_form' %}
@@ -119,7 +160,7 @@ HTML = """
                 <b>お名前:</b><br><input name="n" value="{{sn}}" style="width:95%;padding:5px;"><br><br>
                 <b>コメント本文:</b><br>
                 <textarea name="b" required style="width:95%;height:120px;padding:5px;">{{r_txt}}</textarea><br><br>
-                <input type="submit" value="書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;">
+                <input type="submit" value="💬 書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;">
             </form>
         </div>
     {% endif %}
@@ -216,9 +257,8 @@ def v_thread(cid, tid):
     posts = []
     for p in res.get("posts", []):
         try:
-            # 💡 タブレットから届く [id, tid, n, b, d] の5つの要素(配列)から名前、本文、日付を100%正確に抜き出します
-            if isinstance(p, list) and len(p) >= 5:
-                posts.append({"id": str(p[0]), "n": str(p[2]), "b": str(p[3]), "d": str(p[4])})
+            if isinstance(p, list) and len(p) >= 4:
+                posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
             elif isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
         except:
@@ -230,20 +270,45 @@ def post_form(cid, tid):
     sn = request.cookies.get('un', '名無し')
     res = remote_api("api/get_thread_detail", {"tid": tid})
     r = request.args.get("r")
-    r_txt = f'>>{r}\\n' if r else ""
+    r_txt = f'>>{r}\n' if r else ""
     return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), sn=sn, r_txt=r_txt)
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     now_str = datetime.datetime.now().strftime('%m/%d %H:%M')
+    # 💡 投稿後に最新IDを取得するために、一度タブレットへデータを送って保存させます
     remote_api("api/add_post", {
         "tid": tid, 
         "n": request.form['n'], 
         "b": request.form['b'],
         "d": now_str
     })
+    
+    # 最新の投稿IDを割り出すために1回だけリストを読み直します
+    res = remote_api("api/get_thread_detail", {"tid": tid})
+    last_id = "0"
+    posts = res.get("posts", [])
+    if posts:
+        last_p = posts[-1]
+        last_id = str(last_p[0]) if isinstance(last_p, list) else str(last_p.get('id', '0'))
+    
+    # 💡 【ここが進化！】リロードをせず、書き込まれたデータ「そのもの」を電波に乗せて全員に送ります！
+    socketio.emit('append_new_post', {
+        'id': last_id,
+        'n': request.form['n'],
+        'b': request.form['b'],
+        'd': now_str
+    }, to=f"room_{tid}")
+    
     resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
     resp.set_cookie('un', request.form['n']); return resp
+
+@socketio.on('join_thread')
+def on_join(data):
+    from flask_socketio import join_room
+    tid = data.get('tid')
+    if tid:
+        join_room(f"room_{tid}")
 
 @app.route('/del_c/<int:cid>', methods=['POST'])
 def del_c(cid):
@@ -264,5 +329,4 @@ def del_p(cid, tid, pid):
 if __name__ == '__main__':
     if not os.environ.get('DATABASE_URL'):
         os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
+    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8000)), log_output=True)
