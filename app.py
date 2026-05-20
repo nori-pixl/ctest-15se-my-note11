@@ -2,7 +2,7 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v95_ajax_append"
+app.secret_key = "bbs_render_gateway_final_perfect_v96_fixed_final"
 
 # ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
@@ -22,10 +22,8 @@ HTML = """
 {# 💡 スレ内画面（thread）のときだけ、1秒ごとに無言で新着データだけをチェックする魔法を仕込みました #}
 {% if v == 'thread' %}
 <script>
-    // 💡 これまでに画面上に表示されている投稿のIDを覚えておくためのセット
     var existingPostIds = new Set();
     
-    // 最初から画面にある投稿のIDをすべて登録します
     document.addEventListener("DOMContentLoaded", function() {
         var posts = document.getElementsByClassName('post-block');
         for(var i=0; i<posts.length; i++) {
@@ -34,14 +32,11 @@ HTML = """
     });
 
     setInterval(function(){
-        // 画面を一切リロードせず、コメントデータだけを裏側で1秒ごとにFetch（取得）します
         fetch('/api_local/get_posts/{{cid}}/{{tid}}')
         .then(response => response.json())
         .then(data => {
             if(data.posts) {
                 var container = document.getElementById('posts-container');
-                
-                // 現在画面上にある投稿の数を確認
                 var currentCount = container.getElementsByClassName('post-block').length;
                 
                 data.posts.forEach((p, index) => {
@@ -50,7 +45,6 @@ HTML = """
                         existingPostIds.add(String(p.id));
                         currentCount++;
                         
-                        // 新しい投稿用のブロックをその場に新しく1個作成します
                         var newPostDiv = document.createElement('div');
                         newPostDiv.className = 'post post-block';
                         newPostDiv.setAttribute('data-id', p.id);
@@ -69,14 +63,15 @@ HTML = """
                 });
             }
         }).catch(e => console.log("Checking..."));
-    }, 1000); // 1000ミリ秒 ＝ 1秒ごとに超高速で自動見守りします
+    }, 1000); // 1秒ごとに超高速で自動見守りします
 </script>
 {% endif %}
 
 </head>
 <body>
     <h1><a href="/">掲示板メニュー</a></h1><hr>
-    {% with msgs = get_flashed_messages() %}{% for m m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
+    {# 💡 タイポを完全に修正しました！ #}
+    {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {# ------------------ 1. トップメニュー画面 ------------------ #}
     {% if v == 'menu' %}
@@ -206,7 +201,6 @@ def index():
             pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
 
-# 💡 1秒ごとに最新のコメントデータだけを綺麗に受け取るための専用裏ルートAPI
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
@@ -214,7 +208,7 @@ def api_local_get_posts(cid, tid):
     for p in res.get("posts", []):
         try:
             if isinstance(p, list) and len(p) >= 4:
-                posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p)})
+                posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
             elif isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
         except:
@@ -292,7 +286,7 @@ def v_thread(cid, tid):
     for p in res.get("posts", []):
         try:
             if isinstance(p, list) and len(p) >= 4:
-                posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p)})
+                posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
             elif isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
         except:
