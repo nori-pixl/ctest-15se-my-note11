@@ -1,10 +1,8 @@
 import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
-from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_websocket_pure_append_v1"
-socketio = SocketIO(app, cors_allowed_origins="*", async_mode='eventlet')
+app.secret_key = "bbs_render_gateway_final_perfect_v95_ajax_append"
 
 # ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
 TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
@@ -12,7 +10,6 @@ TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>秘密の掲示板</title>
-<script src="https://socketio.org"></script>
 <style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
     .box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}
@@ -22,42 +19,64 @@ HTML = """
     .nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}
 </style>
 
-{# 💡 スレ内画面（thread）のときだけ、WebSocketのリアルタイム追加Javascriptを起動します #}
+{# 💡 スレ内画面（thread）のときだけ、1秒ごとに無言で新着データだけをチェックする魔法を仕込みました #}
 {% if v == 'thread' %}
 <script>
-    var socket = io();
-    socket.emit('join_thread', {tid: '{{tid}}'});
-
-    // 💡 誰かが投稿した瞬間に、その「書き込まれた中身」を直接電波でキャッチします！
-    socket.on('append_new_post', function(data) {
-        var container = document.getElementById('posts-container');
-        
-        // 💡 画面の書き換え（全入れ替え）を完全にやめました！
-        // 新しい投稿用のブロックをその場で1個作り、中身を組み立てます
-        var newPostDiv = document.createElement('div');
-        newPostDiv.className = 'post';
-        
-        // 何番目の書き込みか（現在の数 + 1）を計算
-        var currentCount = container.getElementsByClassName('post').length + 1;
-        
-        newPostDiv.innerHTML = 
-            currentCount + ': <b>' + data.n + '</b> [' + data.d + '] ' +
-            '<a href="/c/{{cid}}/t/{{tid}}/post_form?r=' + currentCount + '">[返信]</a>' +
-            '<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + data.id + '" style="display:inline;">' +
-            '<input type="submit" value="消" class="del-btn">' +
-            '</form><br>' +
-            '<div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">' + data.b + '</div>';
-            
-        // 💡 今あるリストの「一番下」に、新しい文字ブロックだけをそっと滑り込ませて【追加】します！
-        container.appendChild(newPostDiv);
+    // 💡 これまでに画面上に表示されている投稿のIDを覚えておくためのセット
+    var existingPostIds = new Set();
+    
+    // 最初から画面にある投稿のIDをすべて登録します
+    document.addEventListener("DOMContentLoaded", function() {
+        var posts = document.getElementsByClassName('post-block');
+        for(var i=0; i<posts.length; i++) {
+            existingPostIds.add(posts[i].getAttribute('data-id'));
+        }
     });
+
+    setInterval(function(){
+        // 画面を一切リロードせず、コメントデータだけを裏側で1秒ごとにFetch（取得）します
+        fetch('/api_local/get_posts/{{cid}}/{{tid}}')
+        .then(response => response.json())
+        .then(data => {
+            if(data.posts) {
+                var container = document.getElementById('posts-container');
+                
+                // 現在画面上にある投稿の数を確認
+                var currentCount = container.getElementsByClassName('post-block').length;
+                
+                data.posts.forEach((p, index) => {
+                    // 💡 まだ画面上に存在しない「新しいIDの投稿」だけをピンポイントで見つけます！
+                    if (!existingPostIds.has(String(p.id))) {
+                        existingPostIds.add(String(p.id));
+                        currentCount++;
+                        
+                        // 新しい投稿用のブロックをその場に新しく1個作成します
+                        var newPostDiv = document.createElement('div');
+                        newPostDiv.className = 'post post-block';
+                        newPostDiv.setAttribute('data-id', p.id);
+                        
+                        newPostDiv.innerHTML = 
+                            currentCount + ': <b>' + p.n + '</b> [' + p.d + '] ' +
+                            '<a href="/c/{{cid}}/t/{{tid}}/post_form?r=' + currentCount + '">[返信]</a>' +
+                            '<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + p.id + '" style="display:inline;">' +
+                            '<input type="submit" value="消" class="del-btn">' +
+                            '</form><br>' +
+                            '<div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">' + p.b + '</div>';
+                            
+                        // 💡 今あるリストの「一番下」に、新しい文字ブロックだけを「追加（Append）」します！
+                        container.appendChild(newPostDiv);
+                    }
+                });
+            }
+        }).catch(e => console.log("Checking..."));
+    }, 1000); // 1000ミリ秒 ＝ 1秒ごとに超高速で自動見守りします
 </script>
 {% endif %}
 
 </head>
 <body>
     <h1><a href="/">掲示板メニュー</a></h1><hr>
-    {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
+    {% with msgs = get_flashed_messages() %}{% for m m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 
     {# ------------------ 1. トップメニュー画面 ------------------ #}
     {% if v == 'menu' %}
@@ -135,11 +154,11 @@ HTML = """
         <a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">✍️ このスレに書き込む</a>
         <hr>
         
-        <h3>投稿一覧 <span style="font-size:0.7em;color:#ff5722;">● リアルタイム即時【追加】モード</span></h3>
+        <h3>投稿一覧 <span style="font-size:0.7em;color:#4caf50;">● リアルタイム自動【追加】モード中</span></h3>
         
         <div id="posts-container">
             {% for p in items %}
-                <div class="post">
+                <div class="post post-block" data-id="{{p.id}}">
                     {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <a href="/c/{{cid}}/t/{{tid}}/post_form?r={{loop.index}}">[返信]</a>
                     <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                         <input type="submit" value="消" class="del-btn">
@@ -186,6 +205,21 @@ def index():
         except:
             pass
     return render_template_string(HTML, v='menu', items=items, new_cid=request.args.get('new_cid'))
+
+# 💡 1秒ごとに最新のコメントデータだけを綺麗に受け取るための専用裏ルートAPI
+@app.route('/api_local/get_posts/<int:cid>/<int:tid>')
+def api_local_get_posts(cid, tid):
+    res = remote_api("api/get_thread_detail", {"tid": tid})
+    posts = []
+    for p in res.get("posts", []):
+        try:
+            if isinstance(p, list) and len(p) >= 4:
+                posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p)})
+            elif isinstance(p, dict):
+                posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
+        except:
+            pass
+    return jsonify({"posts": posts})
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
@@ -258,7 +292,7 @@ def v_thread(cid, tid):
     for p in res.get("posts", []):
         try:
             if isinstance(p, list) and len(p) >= 4:
-                posts.append({"id": str(p[0]), "n": str(p[1]), "b": str(p[2]), "d": str(p[3])})
+                posts.append({"id": str(p), "n": str(p), "b": str(p), "d": str(p)})
             elif isinstance(p, dict):
                 posts.append({"id": str(p.get('id', '')), "n": str(p.get('n', '名無し')), "b": str(p.get('b', '')), "d": str(p.get('d', ''))})
         except:
@@ -276,39 +310,14 @@ def post_form(cid, tid):
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     now_str = datetime.datetime.now().strftime('%m/%d %H:%M')
-    # 💡 投稿後に最新IDを取得するために、一度タブレットへデータを送って保存させます
     remote_api("api/add_post", {
         "tid": tid, 
         "n": request.form['n'], 
         "b": request.form['b'],
         "d": now_str
     })
-    
-    # 最新の投稿IDを割り出すために1回だけリストを読み直します
-    res = remote_api("api/get_thread_detail", {"tid": tid})
-    last_id = "0"
-    posts = res.get("posts", [])
-    if posts:
-        last_p = posts[-1]
-        last_id = str(last_p[0]) if isinstance(last_p, list) else str(last_p.get('id', '0'))
-    
-    # 💡 【ここが進化！】リロードをせず、書き込まれたデータ「そのもの」を電波に乗せて全員に送ります！
-    socketio.emit('append_new_post', {
-        'id': last_id,
-        'n': request.form['n'],
-        'b': request.form['b'],
-        'd': now_str
-    }, to=f"room_{tid}")
-    
     resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
     resp.set_cookie('un', request.form['n']); return resp
-
-@socketio.on('join_thread')
-def on_join(data):
-    from flask_socketio import join_room
-    tid = data.get('tid')
-    if tid:
-        join_room(f"room_{tid}")
 
 @app.route('/del_c/<int:cid>', methods=['POST'])
 def del_c(cid):
@@ -327,6 +336,5 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    if not os.environ.get('DATABASE_URL'):
-        os.environ['DATABASE_URL'] = 'sqlite:///:memory:'
-    socketio.run(app, host='0.0.0.0', port=int(os.environ.get('PORT', 8000)), log_output=True)
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
