@@ -1,7 +1,7 @@
 import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v118_full"
+app.secret_key = "bbs_final_perfect_v120_full"
 TUNNEL_URL = "https://trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
@@ -25,6 +25,7 @@ var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{ti
 def remote_api(endpoint, payload):
     try:
         r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
+        # 💡 【大修理】届いたデータを空データで上書きせず、そのまま真っ直ぐ辞書型に変換して呼び出し元へ返します！
         return r.json()
     except: return {}
 def clean_str(val):
@@ -49,13 +50,9 @@ def index():
     if not uid: return render_template_string(HTML, v='login', login_user=None)
     res = remote_api("api/get_classes", {"vlist": request.cookies.get('vlist', '1').split(',')})
     items = [{"id": "1", "name": "一般クラス"}]
-    raw_items = res.get("items", [])
+    raw_items = res.get("items", []) if isinstance(res, dict) else []
     for i in raw_items:
-        # 💡 リスト(配列)形式で届いても辞書型で届いても100%データを抜き出します
-        if isinstance(i, list) and len(i) >= 2:
-            if str(i[0]) != '1': items.append({"id": str(i[0]), "name": str(i[1])})
-        elif isinstance(i, dict) and str(i.get('id')) != '1':
-            items.append({"id": str(i.get('id')), "name": str(i.get('name'))})
+        if isinstance(i, dict): items.append({"id": str(i.get('id')), "name": str(i.get('name'))})
     return render_template_string(HTML, v='menu', items=items, login_user=un, new_cid=request.args.get('new_cid'))
 @app.route('/login_form')
 def login_form(): return render_template_string(HTML, v='login', login_user=None)
@@ -64,14 +61,14 @@ def register_form(): return render_template_string(HTML, v='register', login_use
 @app.route('/register', methods=['POST'])
 def register():
     res = remote_api("api/register", {"uid": request.form['uid'], "un": request.form['un'], "pw": request.form['pw']})
-    if res.get("status") == "ok":
+    if isinstance(res, dict) and res.get("status") == "ok":
         flash("アカウントを作成しました。ログインしてください")
         return redirect('/login_form')
-    flash(res.get("message", "作成に失敗しました")); return redirect('/register_form')
+    flash(res.get("message", "作成に失敗しました") if isinstance(res, dict) else "作成に失敗しました"); return redirect('/register_form')
 @app.route('/login', methods=['POST'])
 def login():
     res = remote_api("api/login", {"uid": request.form['uid'], "pw": request.form['pw']})
-    if res.get("status") == "ok":
+    if isinstance(res, dict) and res.get("status") == "ok":
         resp = make_response(redirect('/'))
         resp.set_cookie('uid', clean_str(res.get('uid')), max_age=60*60*24*30)
         resp.set_cookie('un', clean_str(res.get('un')), max_age=60*60*24*30)
@@ -85,21 +82,19 @@ def api_local_get_threads(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
     if not res or res.get("cname") == "不明": return jsonify({"error": "not_found"})
     threads = []
-    raw_threads = res.get("threads", [])
+    raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        if isinstance(t, list) and len(t) >= 2: threads.append({"id": str(t[0]), "title": str(t[1])})
-        elif isinstance(t, dict): threads.append({"id": str(t.get('id')), "title": str(t.get('title'))})
-    return jsonify({"threads": threads, "members": [clean_str(m) for m in res.get("members", [])]})
+        if isinstance(t, dict): threads.append({"id": str(t.get('id')), "title": str(t.get('title'))})
+    return jsonify({"threads": threads, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
     if not res or res.get("tname") == "不明": return jsonify({"error": "not_found"})
     posts = []
-    raw_posts = res.get("posts", [])
+    raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        if isinstance(p, list) and len(p) >= 4: posts.append({"id": str(p[0]), "n": clean_str(p[1]), "b": str(p[2]), "d": str(p[3])})
-        elif isinstance(p, dict): posts.append({"id": str(p.get('id')), "n": clean_str(p.get('n')), "b": str(p.get('b')), "d": str(p.get('d'))})
-    return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])]})
+        if isinstance(p, dict): posts.append({"id": str(p.get('id')), "n": clean_str(p.get('n')), "b": str(p.get('b')), "d": str(p.get('d'))})
+    return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/find_class', methods=['POST'])
 def find_class():
     uid, un = check_login()
@@ -107,7 +102,7 @@ def find_class():
     fid = request.form.get('fid')
     if not fid or not fid.isdigit() or str(fid) == '1': return redirect('/')
     res = remote_api("api/check_class", {"fid": fid})
-    if res.get("exists"):
+    if isinstance(res, dict) and res.get("exists"):
         vlist = request.cookies.get('vlist', '1').split(',')
         if str(fid) not in vlist: vlist.append(str(fid))
         resp = make_response(redirect('/')); resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30); return resp
@@ -132,11 +127,10 @@ def v_class(cid):
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_class_detail", {"cid": cid})
     threads = []
-    raw_threads = res.get("threads", [])
+    raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        if isinstance(t, list) and len(t) >= 2: threads.append({"id": str(t[0]), "title": str(t[1])})
-        elif isinstance(t, dict): threads.append({"id": str(t.get('id')), "title": str(t.get('title'))})
-    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=[clean_str(m) for m in res.get("members", [])], login_user=un)
+        if isinstance(t, dict): threads.append({"id": str(t.get('id')), "title": str(t.get('title'))})
+    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")) if isinstance(res, dict) else "不明", items=threads, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
     uid, un = check_login()
@@ -147,7 +141,7 @@ def new_t(cid):
     uid, un = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/add_thread", {"cid": cid, "title": request.form['t'], "n": un, "b": request.form['b'], "d": datetime.datetime.now().strftime('%m/%d %H:%M')})
-    tid = res.get("tid")
+    tid = res.get("tid") if isinstance(res, dict) else None
     return redirect(url_for('v_thread', cid=cid, tid=tid) if tid else url_for('v_class', cid=cid))
 @app.route('/c/<int:cid>/t/<int:tid>')
 def v_thread(cid, tid):
@@ -155,17 +149,16 @@ def v_thread(cid, tid):
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_thread_detail", {"tid": tid})
     posts = []
-    raw_posts = res.get("posts", [])
+    raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        if isinstance(p, list) and len(p) >= 4: posts.append({"id": str(p[0]), "n": clean_str(p[1]), "b": str(p[2]), "d": str(p[3])})
-        elif isinstance(p, dict): posts.append({"id": str(p.get('id')), "n": clean_str(p.get('n')), "b": str(p.get('b')), "d": str(p.get('d'))})
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=[clean_str(m) for m in res.get("members", [])], login_user=un)
+        if isinstance(p, dict): posts.append({"id": str(p.get('id')), "n": clean_str(p.get('n')), "b": str(p.get('b')), "d": str(p.get('d'))})
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")) if isinstance(res, dict) else "不明", items=posts, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
     uid, un = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_thread_detail", {"tid": tid})
-    return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), login_user=un)
+    return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")) if isinstance(res, dict) else "不明", login_user=un)
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     uid, un = check_login()
