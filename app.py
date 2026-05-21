@@ -2,10 +2,10 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v112_fixed_half"
+app.secret_key = "bbs_render_gateway_final_perfect_v114_anyone_delete_half"
 
 # あなたの最新の本物トンネルURLをそのまま引き継いでいます
-TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
+TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -53,9 +53,9 @@ HTML = """
                         newLi.style.marginBottom = '12px';
                         newLi.style.fontSize = '1.1em';
                         newLi.innerHTML = '[スレ] <a href="/c/{{cid}}/t/' + t.id + '"><b>' + t.title + '</b></a> ' +
-                            '{% if is_owner %}<form method="POST" action="/del_t/{{cid}}/' + t.id + '" style="display:inline;">' +
+                            '<form method="POST" action="/del_t/{{cid}}/' + t.id + '" style="display:inline;">' +
                             '<input type="submit" value="削除" class="del-btn" onclick="return confirm(\\'消去しますか？\\')">' +
-                            '</form>{% endif %}';
+                            '</form>';
                         container.appendChild(newLi);
                     }
                 });
@@ -107,9 +107,9 @@ HTML = """
                         newPostDiv.setAttribute('data-id', p.id);
                         newPostDiv.innerHTML = currentCount + ': <b>' + p.n + '</b> [' + p.d + '] ' +
                             '<a href="/c/{{cid}}/t/{{tid}}/post_form?r=' + currentCount + '">[返信]</a>' +
-                            '{% if is_owner %}<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + p.id + '" style="display:inline;">' +
+                            '<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + p.id + '" style="display:inline;">' +
                             '<input type="submit" value="消" class="del-btn">' +
-                            '</form>{% endif %}<br>' +
+                            '</form><br>' +
                             '<div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">' + p.b + '</div>';
                         container.appendChild(newPostDiv);
                     }
@@ -213,15 +213,13 @@ HTML = """
         <ul id="threads-container">{% for t in items %}
             <li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">
                 [スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
-                {% if is_owner %}
                 <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
-                {% endif %}
             </li>
         {% endfor %}</ul>
         
-        {% if is_owner and cid|string != '1' and cid|int != 1 %}
+        {% if cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
         </form>
@@ -265,11 +263,9 @@ HTML = """
             {% for p in items %}
                 <div class="post post-block" data-id="{{p.id}}">
                     {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}]
-                    {% if is_owner %}
                     <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                         <input type="submit" value="消" class="del-btn">
-                    </form>
-                    {% endif %}<br>
+                    </form><br>
                     <div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>
                 </div>
             {% endfor %}
@@ -299,12 +295,9 @@ def remote_api(endpoint, payload):
     except:
         return {}
 
-# 💡 カッコや不要な記号を完全に剥ぎ取る超強力お掃除関数
 def clean_str(val):
-    if not val:
-        return ""
+    if not val: return ""
     val_str = str(val)
-    # データベースからタプル文字('admin',)として届いた場合のノイズを徹底消去します
     for char in ["(", ")", "'", ",", "[", "]", '"']:
         val_str = val_str.replace(char, "")
     return val_str.strip()
@@ -312,13 +305,31 @@ def clean_str(val):
 def check_login():
     uid = clean_str(request.cookies.get('uid'))
     un = clean_str(request.cookies.get('un'))
-    # 💡 お掃除後のピュアな文字列で「admin」かどうかを判定するため、主権限が100%大復活します！
-    is_owner = True if uid == 'admin' else False
-    return uid, un, is_owner
+    return uid, un
+
+# 💡 1日の削除回数を記録するグローバル変数（カウンター）
+DELETE_COUNTER = {
+    "date": "",
+    "count": 0
+}
+
+def check_delete_limit():
+    global DELETE_COUNTER
+    today_str = datetime.datetime.now().strftime('%Y-%m-%d')
+    
+    if DELETE_COUNTER["date"] != today_str:
+        DELETE_COUNTER["date"] = today_str
+        DELETE_COUNTER["count"] = 0
+        
+    if DELETE_COUNTER["count"] >= 5:
+        return False
+        
+    DELETE_COUNTER["count"] += 1
+    return True
 
 @app.route('/')
 def index():
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return render_template_string(HTML, v='login', login_user=None)
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
@@ -363,30 +374,26 @@ def logout():
 @app.route('/api_local/get_threads/<int:cid>')
 def api_local_get_threads(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
-    if not res or res.get("cname") == "不明":
-        return jsonify({"error": "not_found"})
+    if not res or res.get("cname") == "不明": return jsonify({"error": "not_found"})
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, dict): threads.append({"id": str(t['id']), "title": str(t['title'])})
-    
     cleaned_members = [clean_str(m) for m in res.get("members", [])]
     return jsonify({"threads": threads, "members": cleaned_members})
 
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
-    if not res or res.get("tname") == "不明":
-        return jsonify({"error": "not_found"})
+    if not res or res.get("tname") == "不明": return jsonify({"error": "not_found"})
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, dict): posts.append({"id": str(p['id']), "n": clean_str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-    
     cleaned_members = [clean_str(m) for m in res.get("members", [])]
     return jsonify({"posts": posts, "members": cleaned_members})
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     fid = request.form.get('fid')
     if not fid or not fid.isdigit() or str(fid) == '1': return redirect('/')
@@ -401,7 +408,7 @@ def find_class():
 
 @app.route('/add_c', methods=['POST'])
 def add_c():
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     nid = random.randint(10000, 99999)
     remote_api("api/add_class", {"id": nid, "name": request.form['cn']})
@@ -419,25 +426,24 @@ def remove_from_list(cid):
 
 @app.route('/c/<int:cid>')
 def v_class(cid):
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_class_detail", {"cid": cid})
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, dict): threads.append({"id": str(t['id']), "title": str(t['title'])})
-    
     cleaned_members = [clean_str(m) for m in res.get("members", [])]
-    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=cleaned_members, is_owner=is_owner, login_user=un)
+    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=cleaned_members, login_user=un)
 
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     return render_template_string(HTML, v='create_form', cid=cid, login_user=un)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/add_thread", {"cid": cid, "title": request.form['t'], "n": un, "b": request.form['b'], "d": datetime.datetime.now().strftime('%m/%d %H:%M')})
     tid = res.get("tid")
@@ -445,49 +451,51 @@ def new_t(cid):
 
 @app.route('/c/<int:cid>/t/<int:tid>')
 def v_thread(cid, tid):
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_thread_detail", {"tid": tid})
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, dict): posts.append({"id": str(p['id']), "n": clean_str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-    
     cleaned_members = [clean_str(m) for m in res.get("members", [])]
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=cleaned_members, is_owner=is_owner, login_user=un)
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=cleaned_members, login_user=un)
 
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_thread_detail", {"tid": tid})
     return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), login_user=un)
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
-    uid, un, is_owner = check_login()
+    uid, un = check_login()
     if not uid: return redirect('/login_form')
     remote_api("api/add_post", {"tid": tid, "n": un, "b": request.form['b'], "d": datetime.datetime.now().strftime('%m/%d %H:%M')})
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 @app.route('/del_c/<int:cid>', methods=['POST'])
 def del_c(cid):
-    uid, un, is_owner = check_login()
-    if not is_owner: return redirect('/')
+    if not check_delete_limit():
+        flash("本日の削除回数の上限(5回)に達しました。削除できません")
+        return redirect('/')
     if str(cid) == '1': return redirect('/')
     remote_api("api/del_class", {"cid": cid})
     return redirect('/')
 
 @app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
-    uid, un, is_owner = check_login()
-    if not is_owner: return redirect('/')
+    if not check_delete_limit():
+        flash("本日の削除回数の上限(5回)に達しました。削除できません")
+        return redirect(url_for('v_class', cid=cid))
     remote_api("api/del_thread", {"tid": tid})
     return redirect(url_for('v_class', cid=cid))
 
 @app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
-    uid, un, is_owner = check_login()
-    if not is_owner: return redirect('/')
+    if not check_delete_limit():
+        flash("本日の削除回数の上限(5回)に達しました。削除できません")
+        return redirect(url_for('v_thread', cid=cid, tid=tid))
     remote_api("api/del_post", {"pid": pid})
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
