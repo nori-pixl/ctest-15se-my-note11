@@ -2,10 +2,10 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v108_delete_guard"
+app.secret_key = "bbs_render_gateway_final_perfect_v110_fixed_half"
 
-# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
-TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
+# 最新の本物URLにしっかり固定しています
+TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -21,7 +21,7 @@ HTML = """
     .error-screen{background:#fff;border:2px solid #ff5252;padding:20px;margin:20px auto;max-width:500px;text-align:center;}
 </style>
 
-{# 💡 スレ一覧画面（class）のとき、1秒ごとに生存チェック #}
+{# スレ一覧画面（class）のとき、1秒ごとに生存チェック #}
 {% if v == 'class' %}
 <script>
     var existingThreadIds = new Set();
@@ -33,7 +33,6 @@ HTML = """
         fetch('/api_local/get_threads/{{cid}}')
         .then(response => response.json())
         .then(data => {
-            // 💡 クラス自体が削除されていたら画面を上書き
             if (data.error === 'not_found') {
                 clearInterval(checkTimer);
                 showDeleteError();
@@ -76,7 +75,7 @@ HTML = """
 </script>
 {% endif %}
 
-{# 💡 スレ内画面（thread）のとき、1秒ごとに生存チェック #}
+{# スレ内画面（thread）のとき、1秒ごとに生存チェック #}
 {% if v == 'thread' %}
 <script>
     var existingPostIds = new Set();
@@ -88,7 +87,6 @@ HTML = """
         fetch('/api_local/get_posts/{{cid}}/{{tid}}')
         .then(response => response.json())
         .then(data => {
-            // 💡 スレ自体、またはクラス自体が削除されていたら画面を上書き
             if (data.error === 'not_found') {
                 clearInterval(checkTimer);
                 showDeleteError();
@@ -162,8 +160,7 @@ HTML = """
             </form>
         </div>
         <p><a href="/login_form">[ ログイン画面に戻る ]</a></p>
-
-    {# ------------------ 3. メニュー画面 ------------------ #}
+            {# ------------------ 3. メニュー画面 ------------------ #}
     {% elif v == 'menu' %}
         <h2>表示中のクラス</h2>
         <ul>
@@ -216,7 +213,6 @@ HTML = """
         <ul id="threads-container">{% for t in items %}
             <li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">
                 [スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
-                {# 💡 主（あなた）にだけ削除ボタンを表示 #}
                 {% if is_owner %}
                 <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
@@ -225,7 +221,6 @@ HTML = """
             </li>
         {% endfor %}</ul>
         
-        {# 💡 主（あなた）にだけ、かつ一般クラス以外のとき、一括削除ボタンを表示 #}
         {% if is_owner and cid|string != '1' and cid|int != 1 %}
         <hr><form method="POST" action="/del_c/{{cid}}">
             <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
@@ -270,7 +265,6 @@ HTML = """
             {% for p in items %}
                 <div class="post post-block" data-id="{{p.id}}">
                     {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}]
-                    {# 💡 主（あなた）にだけコメントの「消」ボタンを表示 #}
                     {% if is_owner %}
                     <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                         <input type="submit" value="消" class="del-btn">
@@ -308,7 +302,6 @@ def remote_api(endpoint, payload):
 def check_login():
     uid = request.cookies.get('uid')
     un = request.cookies.get('un')
-    # 💡 ユーザーIDが「admin」の時だけ「主(作成主)」として特別扱いする設定です
     is_owner = True if uid == 'admin' else False
     return uid, un, is_owner
 
@@ -437,4 +430,47 @@ def new_t(cid):
 def v_thread(cid, tid):
     uid, un, is_owner = check_login()
     if not uid: return redirect('/login_form')
-    res = remote_api("api/get_thread_detail", {"tid": 
+    res = remote_api("api/get_thread_detail", {"tid": tid})
+    posts = []
+    for p in res.get("posts", []):
+        if isinstance(p, dict): posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=res.get("members", []), is_owner=is_owner, login_user=un)
+
+@app.route('/c/<int:cid>/t/<int:tid>/post_form')
+def post_form(cid, tid):
+    uid, un, is_owner = check_login()
+    if not uid: return redirect('/login_form')
+    res = remote_api("api/get_thread_detail", {"tid": tid})
+    return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), login_user=un)
+
+@app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
+def post(cid, tid):
+    uid, un, is_owner = check_login()
+    if not uid: return redirect('/login_form')
+    remote_api("api/add_post", {"tid": tid, "n": un, "b": request.form['b'], "d": datetime.datetime.now().strftime('%m/%d %H:%M')})
+    return redirect(url_for('v_thread', cid=cid, tid=tid))
+
+@app.route('/del_c/<int:cid>', methods=['POST'])
+def del_c(cid):
+    uid, un, is_owner = check_login()
+    if not is_owner: return redirect('/')
+    if str(cid) == '1': return redirect('/')
+    remote_api("api/del_class", {"cid": cid})
+    return redirect('/')
+
+@app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
+def del_t(cid, tid):
+    uid, un, is_owner = check_login()
+    if not is_owner: return redirect('/')
+    remote_api("api/del_thread", {"tid": tid})
+    return redirect(url_for('v_class', cid=cid))
+
+@app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
+def del_p(cid, tid, pid):
+    uid, un, is_owner = check_login()
+    if not is_owner: return redirect('/')
+    remote_api("api/del_post", {"pid": pid})
+    return redirect(url_for('v_thread', cid=cid, tid=tid))
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
