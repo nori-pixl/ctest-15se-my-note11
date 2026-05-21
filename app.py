@@ -1,7 +1,8 @@
 import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v120_full"
+app.secret_key = "bbs_final_perfect_v121_fix_duplicate"
+# 最新の本物トンネルURLを設定しています
 TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
@@ -15,7 +16,14 @@ var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{ti
 {% if v == 'login' %}<h2>[ ログイン ]</h2><div class="box"><form method="POST" action="/login">ユーザーID:<br><input name="uid" required style="width:90%;"><br><br>パスワード:<br><input type="password" name="pw" required style="width:90%;"><br><br><input type="submit" value="ログイン"></form></div><p><a href="/register_form">[ 新規アカウント作成はこちら ]</a></p>
 {% elif v == 'register' %}<h2>[ 新規アカウント作成 ]</h2><div class="box" style="border:2px solid #4caf50;"><form method="POST" action="/register">お好きなユーザーID:<br><input name="uid" required style="width:90%;"><br><br>表示されるお名前:<br><input name="un" value="名無し" required style="width:90%;"><br><br>パスワード:<br><input type="password" name="pw" required style="width:90%;"><br><br><input type="submit" value="アカウントを作成する"></form></div><p><a href="/login_form">[ ログイン画面に戻る ]</a></p>
 {% elif v == 'menu' %}<h2>表示中のクラス</h2><ul>{% for c in items %}<li style="margin-bottom:12px;"><a href="/c/{{c.id}}"><b>{{c.name}}</b></a>{% if c.id != '1' and c.id != 1 %}<form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;"><input type="submit" value="非表示" style="font-size:0.7em;"></form>{% endif %}</li>{% endfor %}</ul><hr><div class="box"><h3>クラスを呼び出す(5桁ID)</h3><form method="POST" action="/find_class"><input name="fid" required style="width:80px;"> <input type="submit" value="追加"></form></div><div class="box"><h3>新クラス作成</h3><form method="POST" action="/add_c"><input name="cn" required placeholder="クラス名"> <input type="submit" value="作成"></form></div>
-{% elif v == 'class' %}<div class="id-info">このクラスのID: {{cid}}</div><br><h2>クラス: {{cname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/" class="nav-btn">[ メニューに戻る ]</a><a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">[ 新規スレ作成画面へ ]</a><hr><h3>スレ一覧 (自動追加モード)</h3><ul id="threads-container">{% for t in items %}<li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">[スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a> <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;"><input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')"></form></li>{% endfor %}</ul>
+{% elif v == 'class' %}<div class="id-info">このクラスのID: {{cid}}</div><br><h2>クラス: {{cname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/" class="nav-btn">[ メニューに戻る ]</a><a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">[ 新規スレ作成画面へ ]</a><hr><h3>スレ一覧 (自動追加モード)</h3><ul id="threads-container">{% for t in items %}
+            <li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">
+                [スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
+                <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
+                    <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
+                </form>
+            </li>
+        {% endfor %}</ul>
 {% if cid|string != '1' and cid|int != 1 %}<hr><form method="POST" action="/del_c/{{cid}}"><input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')"></form>{% endif %}
 {% elif v == 'create_form' %}<h2>新規スレッド作成</h2><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><hr><div class="box" style="border:2px solid #4caf50;"><form method="POST" action="/c/{{cid}}/new"><b>タイトル:</b><br><input name="t" required style="width:95%;padding:5px;"><br><br><b>最初の本文:</b><br><textarea name="b" required style="width:95%;height:100px;padding:5px;"></textarea><br><br><input type="submit" value="この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>
 {% elif v == 'thread' %}<div class="id-info">クラスID: {{cid}}</div><br><h2>スレッド: {{tname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">[ このスレに書き込む ]</a><hr><h3>投稿一覧 (自動追加モード)</h3><div id="posts-container">{% for p in items %}<div class="post post-block" data-id="{{p.id}}">{{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div></div>{% endfor %}</div>
@@ -25,7 +33,6 @@ var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{ti
 def remote_api(endpoint, payload):
     try:
         r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
-        # 💡 【大修理】届いたデータを空データで上書きせず、そのまま真っ直ぐ辞書型に変換して呼び出し元へ返します！
         return r.json()
     except: return {}
 def clean_str(val):
@@ -49,7 +56,8 @@ def index():
     uid, un = check_login()
     if not uid: return render_template_string(HTML, v='login', login_user=None)
     res = remote_api("api/get_classes", {"vlist": request.cookies.get('vlist', '1').split(',')})
-    items = [{"id": "1", "name": "一般クラス"}]
+    # 💡 【重複修正】Render側で勝手に「一般クラス」をリストの先頭に無理やり足すコードを削除しました！
+    items = []
     raw_items = res.get("items", []) if isinstance(res, dict) else []
     for i in raw_items:
         if isinstance(i, dict): items.append({"id": str(i.get('id')), "name": str(i.get('name'))})
@@ -129,7 +137,7 @@ def v_class(cid):
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        if isinstance(t, dict): threads.append({"id": str(t.get('id')), "title": str(t.get('title'))})
+        if isinstance(t, dict): threads.append({"id": str(t.get('id')), "title": str(t['title'])})
     return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")) if isinstance(res, dict) else "不明", items=threads, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
