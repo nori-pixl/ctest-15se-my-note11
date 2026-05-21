@@ -5,7 +5,7 @@ app = Flask(__name__)
 app.secret_key = "bbs_render_gateway_final_perfect_v110_fixed_half"
 
 # 最新の本物URLにしっかり固定しています
-TUNNEL_URL = "https://trycloudflare.com"
+TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
