@@ -2,10 +2,10 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v105_no_emoji_pure"
+app.secret_key = "bbs_render_gateway_final_perfect_v108_delete_guard"
 
 # ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
-TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
+TUNNEL_URL = "https://trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -18,9 +18,10 @@ HTML = """
     .id-info{background:#e3f2fd; color:#1565c0; padding:5px; border-radius:3px; font-weight:bold; display:inline-block; margin-bottom:10px;}
     .nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}
     .member-box{background:#f9f9f9;border:1px dashed #bbb;padding:8px;font-size:0.85em;color:#666;margin-bottom:15px;}
+    .error-screen{background:#fff;border:2px solid #ff5252;padding:20px;margin:20px auto;max-width:500px;text-align:center;}
 </style>
 
-{# スレ一覧画面（class）のとき、1秒ごとに新着スレだけを下に追加するスクリプト #}
+{# 💡 スレ一覧画面（class）のとき、1秒ごとに生存チェック #}
 {% if v == 'class' %}
 <script>
     var existingThreadIds = new Set();
@@ -28,10 +29,20 @@ HTML = """
         var ts = document.getElementsByClassName('thread-block');
         for(var i=0; i<ts.length; i++) { existingThreadIds.add(ts[i].getAttribute('data-id')); }
     });
-    setInterval(function(){
+    var checkTimer = setInterval(function(){
         fetch('/api_local/get_threads/{{cid}}')
         .then(response => response.json())
         .then(data => {
+            // 💡 クラス自体が削除されていたら画面を上書き
+            if (data.error === 'not_found') {
+                clearInterval(checkTimer);
+                showDeleteError();
+                return;
+            }
+            if(data.members) {
+                document.getElementById('member-count').innerText = data.members.length;
+                document.getElementById('member-list').innerText = data.members.join(', ');
+            }
             if(data.threads) {
                 var container = document.getElementById('threads-container');
                 data.threads.forEach((t) => {
@@ -43,19 +54,29 @@ HTML = """
                         newLi.style.marginBottom = '12px';
                         newLi.style.fontSize = '1.1em';
                         newLi.innerHTML = '[スレ] <a href="/c/{{cid}}/t/' + t.id + '"><b>' + t.title + '</b></a> ' +
-                            '<form method="POST" action="/del_t/{{cid}}/' + t.id + '" style="display:inline;">' +
+                            '{% if is_owner %}<form method="POST" action="/del_t/{{cid}}/' + t.id + '" style="display:inline;">' +
                             '<input type="submit" value="削除" class="del-btn" onclick="return confirm(\\'消去しますか？\\')">' +
-                            '</form>';
+                            '</form>{% endif %}';
                         container.appendChild(newLi);
                     }
                 });
             }
         });
     }, 1000);
+
+    function showDeleteError() {
+        document.body.innerHTML = '<div class="error-screen">' +
+            '<h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2>' +
+            '<p><b>なぜこれが表示されてますか?</b></p>' +
+            '<p>作成主が削除した可能性があります。</p>' +
+            '<p>作成主に連絡を推奨します。</p><br>' +
+            '<a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a>' +
+            '</div>';
+    }
 </script>
 {% endif %}
 
-{# スレ内画面（thread）のとき、1秒ごとに新着コメントを自動追加するスクリプト #}
+{# 💡 スレ内画面（thread）のとき、1秒ごとに生存チェック #}
 {% if v == 'thread' %}
 <script>
     var existingPostIds = new Set();
@@ -63,10 +84,20 @@ HTML = """
         var posts = document.getElementsByClassName('post-block');
         for(var i=0; i<posts.length; i++) { existingPostIds.add(posts[i].getAttribute('data-id')); }
     });
-    setInterval(function(){
+    var checkTimer = setInterval(function(){
         fetch('/api_local/get_posts/{{cid}}/{{tid}}')
         .then(response => response.json())
         .then(data => {
+            // 💡 スレ自体、またはクラス自体が削除されていたら画面を上書き
+            if (data.error === 'not_found') {
+                clearInterval(checkTimer);
+                showDeleteError();
+                return;
+            }
+            if(data.members) {
+                document.getElementById('member-count').innerText = data.members.length;
+                document.getElementById('member-list').innerText = data.members.join(', ');
+            }
             if(data.posts) {
                 var container = document.getElementById('posts-container');
                 var currentCount = container.getElementsByClassName('post-block').length;
@@ -78,9 +109,9 @@ HTML = """
                         newPostDiv.setAttribute('data-id', p.id);
                         newPostDiv.innerHTML = currentCount + ': <b>' + p.n + '</b> [' + p.d + '] ' +
                             '<a href="/c/{{cid}}/t/{{tid}}/post_form?r=' + currentCount + '">[返信]</a>' +
-                            '<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + p.id + '" style="display:inline;">' +
+                            '{% if is_owner %}<form method="POST" action="/del_p/{{cid}}/{{tid}}/' + p.id + '" style="display:inline;">' +
                             '<input type="submit" value="消" class="del-btn">' +
-                            '</form><br>' +
+                            '</form>{% endif %}<br>' +
                             '<div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">' + p.b + '</div>';
                         container.appendChild(newPostDiv);
                     }
@@ -88,6 +119,16 @@ HTML = """
             }
         });
     }, 1000);
+
+    function showDeleteError() {
+        document.body.innerHTML = '<div class="error-screen">' +
+            '<h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2>' +
+            '<p><b>なぜこれが表示されてますか?</b></p>' +
+            '<p>作成主が削除した可能性があります。</p>' +
+            '<p>作成主に連絡を推奨します。</p><br>' +
+            '<a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a>' +
+            '</div>';
+    }
 </script>
 {% endif %}
 </head>
@@ -156,14 +197,15 @@ HTML = """
         <div class="id-info">このクラスのID: {{cid}}</div><br>
         <h2>クラス: {{cname}}</h2>
         
-        {# 💡 絵文字(👥)を完全に撤去しました #}
         <div class="member-box">
-            [ 参加メンバー / 合計 {{ members|length }}人 ]<br>
+            [ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br>
+            <span id="member-list">
             {% for member in members %}
                 <b>{{member}}</b>{% if not loop.last %}, {% endif %}
             {% else %}
                 まだ登録メンバーはいません
             {% endfor %}
+            </span>
         </div>
 
         <a href="/" class="nav-btn">[ メニューに戻る ]</a>
@@ -174,11 +216,21 @@ HTML = """
         <ul id="threads-container">{% for t in items %}
             <li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">
                 [スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a>
+                {# 💡 主（あなた）にだけ削除ボタンを表示 #}
+                {% if is_owner %}
                 <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;">
                     <input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')">
                 </form>
+                {% endif %}
             </li>
         {% endfor %}</ul>
+        
+        {# 💡 主（あなた）にだけ、かつ一般クラス以外のとき、一括削除ボタンを表示 #}
+        {% if is_owner and cid|string != '1' and cid|int != 1 %}
+        <hr><form method="POST" action="/del_c/{{cid}}">
+            <input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')">
+        </form>
+        {% endif %}
 
     {# ------------------ 5. スレ作成画面 ------------------ #}
     {% elif v == 'create_form' %}
@@ -199,14 +251,15 @@ HTML = """
         <div class="id-info">クラスID: {{cid}}</div><br>
         <h2>スレッド: {{tname}}</h2>
         
-        {# 💡 絵文字(👥)を完全に撤去しました #}
         <div class="member-box">
-            [ 参加メンバー / 合計 {{ members|length }}人 ]<br>
+            [ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br>
+            <span id="member-list">
             {% for member in members %}
                 <b>{{member}}</b>{% if not loop.last %}, {% endif %}
             {% else %}
                 まだ登録メンバーはいません
             {% endfor %}
+            </span>
         </div>
 
         <a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a>
@@ -217,9 +270,12 @@ HTML = """
             {% for p in items %}
                 <div class="post post-block" data-id="{{p.id}}">
                     {{loop.index}}: <b>{{p.n}}</b> [{{p.d}}]
+                    {# 💡 主（あなた）にだけコメントの「消」ボタンを表示 #}
+                    {% if is_owner %}
                     <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;">
                         <input type="submit" value="消" class="del-btn">
-                    </form><br>
+                    </form>
+                    {% endif %}<br>
                     <div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>
                 </div>
             {% endfor %}
@@ -250,11 +306,15 @@ def remote_api(endpoint, payload):
         return {}
 
 def check_login():
-    return request.cookies.get('uid'), request.cookies.get('un')
+    uid = request.cookies.get('uid')
+    un = request.cookies.get('un')
+    # 💡 ユーザーIDが「admin」の時だけ「主(作成主)」として特別扱いする設定です
+    is_owner = True if uid == 'admin' else False
+    return uid, un, is_owner
 
 @app.route('/')
 def index():
-    uid, un = check_login()
+    uid, un, is_owner = check_login()
     if not uid: return render_template_string(HTML, v='login', login_user=None)
     vlist = request.cookies.get('vlist', '1').split(',')
     res = remote_api("api/get_classes", {"vlist": vlist})
@@ -299,22 +359,27 @@ def logout():
 @app.route('/api_local/get_threads/<int:cid>')
 def api_local_get_threads(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
+    if not res or res.get("cname") == "不明":
+        return jsonify({"error": "not_found"})
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, dict): threads.append({"id": str(t['id']), "title": str(t['title'])})
-    return jsonify({"threads": threads})
+    return jsonify({"threads": threads, "members": res.get("members", [])})
 
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
+    if not res or res.get("tname") == "不明":
+        return jsonify({"error": "not_found"})
     posts = []
     for p in res.get("posts", []):
         if isinstance(p, dict): posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-    return jsonify({"posts": posts})
+    return jsonify({"posts": posts, "members": res.get("members", [])})
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
-    if not check_login(): return redirect('/login_form')
+    uid, un, is_owner = check_login()
+    if not uid: return redirect('/login_form')
     fid = request.form.get('fid')
     if not fid or not fid.isdigit() or str(fid) == '1': return redirect('/')
     res = remote_api("api/check_class", {"fid": fid})
@@ -328,7 +393,8 @@ def find_class():
 
 @app.route('/add_c', methods=['POST'])
 def add_c():
-    if not check_login(): return redirect('/login_form')
+    uid, un, is_owner = check_login()
+    if not uid: return redirect('/login_form')
     nid = random.randint(10000, 99999)
     remote_api("api/add_class", {"id": nid, "name": request.form['cn']})
     vlist = request.cookies.get('vlist', '1').split(',')
@@ -345,23 +411,23 @@ def remove_from_list(cid):
 
 @app.route('/c/<int:cid>')
 def v_class(cid):
-    uid, un = check_login()
+    uid, un, is_owner = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/get_class_detail", {"cid": cid})
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, dict): threads.append({"id": str(t['id']), "title": str(t['title'])})
-    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=res.get("members", []), login_user=un)
+    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=res.get("members", []), is_owner=is_owner, login_user=un)
 
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
-    uid, un = check_login()
+    uid, un, is_owner = check_login()
     if not uid: return redirect('/login_form')
     return render_template_string(HTML, v='create_form', cid=cid, login_user=un)
 
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
-    uid, un = check_login()
+    uid, un, is_owner = check_login()
     if not uid: return redirect('/login_form')
     res = remote_api("api/add_thread", {"cid": cid, "title": request.form['t'], "n": un, "b": request.form['b'], "d": datetime.datetime.now().strftime('%m/%d %H:%M')})
     tid = res.get("tid")
@@ -369,43 +435,6 @@ def new_t(cid):
 
 @app.route('/c/<int:cid>/t/<int:tid>')
 def v_thread(cid, tid):
-    uid, un = check_login()
+    uid, un, is_owner = check_login()
     if not uid: return redirect('/login_form')
-    res = remote_api("api/get_thread_detail", {"tid": tid})
-    posts = []
-    for p in res.get("posts", []):
-        if isinstance(p, dict): posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=res.get("members", []), login_user=un)
-
-@app.route('/c/<int:cid>/t/<int:tid>/post_form')
-def post_form(cid, tid):
-    uid, un = check_login()
-    if not uid: return redirect('/login_form')
-    res = remote_api("api/get_thread_detail", {"tid": tid})
-    return render_template_string(HTML, v='post_form', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), login_user=un)
-
-@app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
-def post(cid, tid):
-    uid, un = check_login()
-    if not uid: return redirect('/login_form')
-    remote_api("api/add_post", {"tid": tid, "n": un, "b": request.form['b'], "d": datetime.datetime.now().strftime('%m/%d %H:%M')})
-    return redirect(url_for('v_thread', cid=cid, tid=tid))
-
-@app.route('/del_c/<int:cid>', methods=['POST'])
-def del_c(cid):
-    if str(cid) == '1': return redirect('/')
-    remote_api("api/del_class", {"cid": cid})
-    return redirect('/')
-
-@app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
-def del_t(cid, tid):
-    remote_api("api/del_thread", {"tid": tid})
-    return redirect(url_for('v_class', cid=cid))
-
-@app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
-def del_p(cid, tid, pid):
-    remote_api("api/del_post", {"pid": pid})
-    return redirect(url_for('v_thread', cid=cid, tid=tid))
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+    res = remote_api("api/get_thread_detail", {"tid": 
