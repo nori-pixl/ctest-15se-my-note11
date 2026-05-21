@@ -1,7 +1,7 @@
 import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v124_full"
+app.secret_key = "bbs_final_perfect_v125_ultimate"
 TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
@@ -18,7 +18,7 @@ var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{ti
 {% elif v == 'class' %}<div class="id-info">このクラスのID: {{cid}}</div><br><h2>クラス: {{cname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/" class="nav-btn">[ メニューに戻る ]</a><a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">[ 新規スレ作成画面へ ]</a><hr><h3>スレ一覧 (自動追加モード)</h3><ul id="threads-container">{% for t in items %}<li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">[スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a> <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;"><input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')"></form></li>{% endfor %}</ul>
 {% if cid|string != '1' and cid|int != 1 %}<hr><form method="POST" action="/del_c/{{cid}}"><input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')"></form>{% endif %}
 {% elif v == 'create_form' %}<h2>新規スレッド作成</h2><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><hr><div class="box" style="border:2px solid #4caf50;"><form method="POST" action="/c/{{cid}}/new"><b>タイトル:</b><br><input name="t" required style="width:95%;padding:5px;"><br><br><b>最初の本文:</b><br><textarea name="b" required style="width:95%;height:100px;padding:5px;"></textarea><br><br><input type="submit" value="この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>
-{% elif v == 'thread' %}<div class="id-info">クラスID: {{cid}}</div><br><h2>スレッド: {{tname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}幕僚登録メンバーはいません{% endfor %}</span></div><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">[ このスレに書き込む ]</a><hr><h3>投稿一覧 (自動追加モード)</h3><div id="posts-container">{% for p in items %}<div class="post post-block" data-id="{{p.id}}">{{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>{% if p.img %}<img src="{{p.img}}" class="posted-img">{% endif %}</div>{% endfor %}</div>
+{% elif v == 'thread' %}<div class="id-info">クラスID: {{cid}}</div><br><h2>スレッド: {{tname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">[ このスレに書き込む ]</a><hr><h3>投稿一覧 (自動追加モード)</h3><div id="posts-container">{% for p in items %}<div class="post post-block" data-id="{{p.id}}">{{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>{% if p.img %}<img src="{{p.img}}" class="posted-img">{% endif %}</div>{% endfor %}</div>
 {% elif v == 'post_form' %}<h2>コメント書き込み</h2><a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">[ スレに戻る ]</a><hr><div class="box" style="border:2px solid #2196f3;"><h4>スレ「{{tname}}」への返信</h4><form method="POST" action="/c/{{cid}}/t/{{tid}}/p" enctype="multipart/form-data"><b>コメント本文:</b><br><textarea name="b" required style="width:95%;height:120px;padding:5px;"></textarea><br><br><b>画像貼り付け (任意):</b><br><input type="file" name="f" accept="image/*"><br><br><input type="submit" value="書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>{% endif %}
 </body></html>
 """
@@ -27,7 +27,6 @@ def remote_api(endpoint, payload):
         r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
         return r.json()
     except: return {}
-# 💡 画像データ(Base64)以外の、通常のテキスト情報からカッコやカンマを徹底的に削ぎ落とす修復関数
 def clean_str(val):
     if not val: return ""
     v = str(val)
@@ -62,10 +61,11 @@ def index():
     items = []
     raw_items = res.get("items", []) if isinstance(res, dict) else []
     for i in raw_items:
-        # 💡 タブレットからカッコ付きで届いてしまっても、Render側で綺麗に名前とIDを救出します
-        cleaned_id = clean_str(i.get('id'))
-        cleaned_name = clean_str(i.get('name'))
-        if cleaned_id: items.append({"id": cleaned_id, "name": cleaned_name if cleaned_name else "一般クラス"})
+        # 💡 ここでカッコや辞書型データのズレをすべてピュアな文字に修正します
+        if isinstance(i, dict):
+            cid = clean_str(i.get('id'))
+            cn = clean_str(i.get('name'))
+            if cid: items.append({"id": cid, "name": cn if cn else "一般クラス"})
     return render_template_string(HTML, v='menu', items=items, login_user=un, new_cid=request.args.get('new_cid'))
 @app.route('/login_form')
 def login_form(): return render_template_string(HTML, v='login', login_user=None)
@@ -90,26 +90,31 @@ def login():
 @app.route('/logout')
 def logout():
     resp = make_response(redirect('/login_form')); resp.delete_cookie('uid'); resp.delete_cookie('un'); return resp
+
+# 💡 【1番重要】1秒ごとのリアルタイム通信が叩きにくる窓口も、カッコを力ずくで剥ぎ取る仕様に大改造しました！
 @app.route('/api_local/get_threads/<int:cid>')
 def api_local_get_threads(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
-    if not res or res.get("cname") == "不明": return jsonify({"error": "not_found"})
+    if not res or clean_str(res.get("cname")) == "不明": return jsonify({"error": "not_found"})
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        # 💡 カッコ付きのデータから純粋なIDとタイトルを修復します
-        threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
+        if isinstance(t, dict):
+            threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
     return jsonify({"threads": threads, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
+
+# 💡 【2番重要】コメント自動追加の窓口も、画像Base64を壊さずにテキストデータだけ綺麗にお掃除します！
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
-    if not res or res.get("tname") == "不明": return jsonify({"error": "not_found"})
+    if not res or clean_str(res.get("tname")) == "不明": return jsonify({"error": "not_found"})
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        # 💡 画像データ(img)は壊さないようにそのまま通し、名前(n)や本文(b)のゴミだけを狙い撃ちでお掃除します！
-        posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
+        if isinstance(p, dict):
+            posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
     return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
+
 @app.route('/find_class', methods=['POST'])
 def find_class():
     uid, un = check_login()
@@ -144,7 +149,7 @@ def v_class(cid):
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
+        if isinstance(t, dict): threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
     return render_template_string(HTML, v='class', cid=cid, cname=clean_str(res.get("cname", "不明")) if isinstance(res, dict) else "不明", items=threads, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
@@ -166,7 +171,7 @@ def v_thread(cid, tid):
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
+        if isinstance(p, dict): posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=clean_str(res.get("tname", "不明")) if isinstance(res, dict) else "不明", items=posts, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
@@ -208,4 +213,4 @@ def del_p(cid, tid, pid):
         return redirect(url_for('v_thread', cid=cid, tid=tid))
     remote_api("api/del_post", {"pid": pid}); return redirect(url_for('v_thread', cid=cid, tid=tid))
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+    app.run(host='0.0.0.0', port=int(os.envir
