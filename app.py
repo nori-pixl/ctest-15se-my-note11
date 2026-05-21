@@ -1,18 +1,15 @@
-import os, random, datetime, requests
+import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v122_image_half"
+app.secret_key = "bbs_final_perfect_v123_full"
 TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
-
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
 <style>body{font-family:monospace;background:#eee;padding:15px;color:#333;}.box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}.post{border-bottom:1px solid #ccc;padding:10px 0;}.del-btn{background:#ffcccc;cursor:pointer;font-size:0.7em;border:1px solid #999;float:right;}.id-info{background:#e3f2fd;color:#1565c0;padding:5px;border-radius:3px;font-weight:bold;display:inline-block;margin-bottom:10px;}.nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}.member-box{background:#f9f9f9;border:1px dashed #bbb;padding:8px;font-size:0.85em;color:#666;margin-bottom:15px;}.error-screen{background:#fff;border:2px solid #ff5252;padding:20px;margin:20px auto;max-width:500px;text-align:center;}.posted-img{max-width:80%;max-height:200px;display:block;margin-top:8px;border:1px solid #ccc;}</style>
 {% if v == 'class' %}<script>var existingThreadIds = new Set();document.addEventListener("DOMContentLoaded", function() {var ts = document.getElementsByClassName('thread-block');for(var i=0; i<ts.length; i++) { existingThreadIds.add(ts[i].getAttribute('data-id')); }});
 var checkTimer = setInterval(function(){fetch('/api_local/get_threads/{{cid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.threads){var container = document.getElementById('threads-container');d.threads.forEach((t)=>{if(!existingThreadIds.has(String(t.id))){existingThreadIds.add(String(t.id));var li=document.createElement('li');li.className='thread-block';li.setAttribute('data-id',t.id);li.style.marginBottom='12px';li.style.fontSize='1.1em';li.innerHTML='[スレ] <a href="/c/{{cid}}/t/'+t.id+'"><b>'+t.title+'</b></a> <form method="POST" action="/del_t/{{cid}}/'+t.id+'" style="display:inline;"><input type="submit" value="削除" class="del-btn" onclick="return confirm(\\'消去しますか？\\')"></form>';container.appendChild(li);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>なぜこれが表示されてますか?</b></p><p>作成主が削除した可能性があります。</p><p>作成主に連絡を推奨します。</p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
 {% if v == 'thread' %}<script>var existingPostIds = new Set();document.addEventListener("DOMContentLoaded", function() {var ps = document.getElementsByClassName('post-block');for(var i=0; i<ps.length; i++) { existingPostIds.add(ps[i].getAttribute('data-id')); }});
-var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{tid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.posts){var container = document.getElementById('posts-container');var currentCount = container.getElementsByClassName('post-block').length;d.posts.forEach((p, index)=>{if(!existingPostIds.has(String(p.id))){existingPostIds.add(String(p.id));currentCount++;var div=document.createElement('div');div.className='post post-block';div.setAttribute('data-id',p.id);
-var imgHtml = p.img ? '<img src="' + p.img + '" class="posted-img">' : '';
-div.innerHTML=currentCount+': <b>'+p.n+'</b> ['+p.d+'] <a href="/c/{{cid}}/t/{{tid}}/post_form?r='+currentCount+'">[返信]</a> <form method="POST" action="/del_p/{{cid}}/{{tid}}/'+p.id+'" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">'+p.b+'</div>' + imgHtml;container.appendChild(div);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>なぜこれが表示されてますか?</b></p><p>作成主が削除した可能性があります。</p><p>作成主に連絡を推奨します。</p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
+var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{tid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.posts){var container = document.getElementById('posts-container');var currentCount = container.getElementsByClassName('post-block').length;d.posts.forEach((p, index)=>{if(!existingPostIds.has(String(p.id))){existingPostIds.add(String(p.id));currentCount++;var div=document.createElement('div');div.className='post post-block';div.setAttribute('data-id',p.id);var imgHtml = p.img ? '<img src="'+p.img+'" class="posted-img">' : '';div.innerHTML=currentCount+': <b>'+p.n+'</b> ['+p.d+'] <a href="/c/{{cid}}/t/{{tid}}/post_form?r='+currentCount+'">[返信]</a> <form method="POST" action="/del_p/{{cid}}/{{tid}}/'+p.id+'" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">'+p.b+'</div>'+imgHtml;container.appendChild(div);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>なぜこれが表示されてますか?</b></p><p>作成主が削除した可能性があります。</p><p>作成主に連絡を推奨します。</p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
 </head><body><h1><a href="/">秘密の掲示板</a></h1>{% if login_user %}<div style="text-align:right;font-size:0.8em;">ログイン中: <b>{{login_user}}</b> | <a href="/logout">[ ログアウト ]</a></div>{% endif %}<hr>
 {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 {% if v == 'login' %}<h2>[ ログイン ]</h2><div class="box"><form method="POST" action="/login">ユーザーID:<br><input name="uid" required style="width:90%;"><br><br>パスワード:<br><input type="password" name="pw" required style="width:90%;"><br><br><input type="submit" value="ログイン"></form></div><p><a href="/register_form">[ 新規アカウント作成はこちら ]</a></p>
@@ -25,7 +22,6 @@ div.innerHTML=currentCount+': <b>'+p.n+'</b> ['+p.d+'] <a href="/c/{{cid}}/t/{{t
 {% elif v == 'post_form' %}<h2>コメント書き込み</h2><a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">[ スレに戻る ]</a><hr><div class="box" style="border:2px solid #2196f3;"><h4>スレ「{{tname}}」への返信</h4><form method="POST" action="/c/{{cid}}/t/{{tid}}/p" enctype="multipart/form-data"><b>コメント本文:</b><br><textarea name="b" required style="width:95%;height:120px;padding:5px;"></textarea><br><br><b>画像貼り付け (任意):</b><br><input type="file" name="f" accept="image/*"><br><br><input type="submit" value="書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>{% endif %}
 </body></html>
 """
-import base64
 def remote_api(endpoint, payload):
     try:
         r = requests.post(f"{TUNNEL_URL}/{endpoint}", json=payload, timeout=5)
@@ -37,10 +33,8 @@ def clean_str(val):
     for c in ["(", ")", "'", ",", "[", "]", '"']: v = v.replace(c, "")
     return v.strip()
 def check_login(): return clean_str(request.cookies.get('uid')), clean_str(request.cookies.get('un'))
-
 DELETE_COUNTER = {"date": "", "count": 0}
-IMAGE_COUNTER = {"date": "", "count": 0} # 💡 画像貼り付けカウンター
-
+IMAGE_COUNTER = {"date": "", "count": 0}
 def check_delete_limit():
     global DELETE_COUNTER
     t = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -50,7 +44,6 @@ def check_delete_limit():
     if DELETE_COUNTER["count"] >= 5: return False
     DELETE_COUNTER["count"] += 1
     return True
-
 def check_image_limit():
     global IMAGE_COUNTER
     t = datetime.datetime.now().strftime('%Y-%m-%d')
@@ -60,7 +53,6 @@ def check_image_limit():
     if IMAGE_COUNTER["count"] >= 5: return False
     IMAGE_COUNTER["count"] += 1
     return True
-
 @app.route('/')
 def index():
     uid, un = check_login()
@@ -110,6 +102,7 @@ def api_local_get_posts(cid, tid):
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
+        # 💡 画像データ(img)は長いBase64形式なので、clean_strを実行せず、そのまま綺麗に取得させます！
         if isinstance(p, dict): posts.append({"id": str(p.get('id')), "n": clean_str(p.get('n')), "b": str(p.get('b')), "d": str(p.get('d')), "img": p.get('img', '')})
     return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/find_class', methods=['POST'])
