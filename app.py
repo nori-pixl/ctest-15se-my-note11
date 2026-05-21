@@ -5,12 +5,11 @@ app = Flask(__name__)
 app.secret_key = "bbs_render_gateway_final_perfect_v96_fixed_final"
 
 # ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
-TUNNEL_URL = "https://knitting-gender-dvds-hidden.trycloudflare.com"
+TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ngm-mynote ver2.4 掲示板</title>
-<link rel="icon" href="icon.png" type="image/png">
 
 <style>
     body{font-family:monospace;background:#eee;padding:15px;color:#333;}
