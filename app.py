@@ -1,7 +1,7 @@
 import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v126_ultimate"
+app.secret_key = "bbs_final_perfect_v127_ultimate"
 TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
@@ -32,6 +32,13 @@ def clean_str(val):
     v = str(val)
     for c in ["(", ")", "'", ",", "[", "]", '"']: v = v.replace(c, "")
     return v.strip()
+def parse_item(data):
+    # 💡 辞書型・リスト型のどちらでデータが届いても、100%安全に文字データを救出するハイブリッドパーサー
+    if isinstance(data, dict): return data
+    if isinstance(data, list):
+        if len(data) >= 5: return {"id": clean_str(data[0]), "n": clean_str(data[1]), "b": clean_str(data[2]), "d": clean_str(data[3]), "img": str(data[4])}
+        if len(data) >= 2: return {"id": clean_str(data[0]), "name": clean_str(data[1]), "title": clean_str(data[1])}
+    return {}
 def check_login(): return clean_str(request.cookies.get('uid')), clean_str(request.cookies.get('un'))
 DELETE_COUNTER = {"date": "", "count": 0}
 IMAGE_COUNTER = {"date": "", "count": 0}
@@ -61,10 +68,8 @@ def index():
     items = []
     raw_items = res.get("items", []) if isinstance(res, dict) else []
     for i in raw_items:
-        if isinstance(i, dict):
-            cid = clean_str(i.get('id'))
-            cn = clean_str(i.get('name'))
-            if cid: items.append({"id": cid, "name": cn if cn else "一般クラス"})
+        parsed = parse_item(i)
+        if parsed.get('id'): items.append({"id": parsed['id'], "name": parsed.get('name', '一般クラス')})
     return render_template_string(HTML, v='menu', items=items, login_user=un, new_cid=request.args.get('new_cid'))
 @app.route('/login_form')
 def login_form(): return render_template_string(HTML, v='login', login_user=None)
@@ -96,8 +101,8 @@ def api_local_get_threads(cid):
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        if isinstance(t, dict):
-            threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
+        parsed = parse_item(t)
+        if parsed.get('id'): threads.append({"id": parsed['id'], "title": parsed.get('title', '無題')})
     return jsonify({"threads": threads, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
@@ -106,8 +111,8 @@ def api_local_get_posts(cid, tid):
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        if isinstance(p, dict):
-            posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
+        parsed = parse_item(p)
+        if parsed.get('id'): posts.append({"id": parsed['id'], "n": parsed.get('n', '名無し'), "b": parsed.get('b', ''), "d": parsed.get('d', ''), "img": parsed.get('img', '')})
     return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/find_class', methods=['POST'])
 def find_class():
@@ -143,7 +148,8 @@ def v_class(cid):
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        if isinstance(t, dict): threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
+        parsed = parse_item(t)
+        if parsed.get('id'): threads.append({"id": parsed['id'], "title": parsed.get('title', '無題')})
     return render_template_string(HTML, v='class', cid=cid, cname=clean_str(res.get("cname", "不明")) if isinstance(res, dict) else "不明", items=threads, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
@@ -165,7 +171,8 @@ def v_thread(cid, tid):
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        if isinstance(p, dict): posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
+        parsed = parse_item(p)
+        if parsed.get('id'): posts.append({"id": parsed['id'], "n": parsed.get('n', '名無し'), "b": parsed.get('b', ''), "d": parsed.get('d', ''), "img": parsed.get('img', '')})
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=clean_str(res.get("tname", "不明")) if isinstance(res, dict) else "不明", items=posts, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
@@ -203,9 +210,4 @@ def del_t(cid, tid):
 @app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
     if not check_delete_limit():
-        flash("本日の削除回数の上限(5回)に達しました。削除できません")
-        return redirect(url_for('v_thread', cid=cid, tid=tid))
-    remote_api("api/del_post", {"pid": pid}); return redirect(url_for('v_thread', cid=cid, tid=tid))
-if __name__ == '__main__':
-    # 💡 途切れていた「os.environ.get('PORT', 8000)」を完璧に書き直しました！
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+        fl
