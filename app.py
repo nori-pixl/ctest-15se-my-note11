@@ -2,9 +2,9 @@ import os, random, datetime, requests
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 
 app = Flask(__name__)
-app.secret_key = "bbs_render_gateway_final_perfect_v110_fixed_half"
+app.secret_key = "bbs_render_gateway_final_perfect_v112_fixed_half"
 
-# 最新の本物URLにしっかり固定しています
+# あなたの最新の本物トンネルURLをそのまま引き継いでいます
 TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
 
 HTML = """
@@ -299,9 +299,20 @@ def remote_api(endpoint, payload):
     except:
         return {}
 
+# 💡 カッコや不要な記号を完全に剥ぎ取る超強力お掃除関数
+def clean_str(val):
+    if not val:
+        return ""
+    val_str = str(val)
+    # データベースからタプル文字('admin',)として届いた場合のノイズを徹底消去します
+    for char in ["(", ")", "'", ",", "[", "]", '"']:
+        val_str = val_str.replace(char, "")
+    return val_str.strip()
+
 def check_login():
-    uid = request.cookies.get('uid')
-    un = request.cookies.get('un')
+    uid = clean_str(request.cookies.get('uid'))
+    un = clean_str(request.cookies.get('un'))
+    # 💡 お掃除後のピュアな文字列で「admin」かどうかを判定するため、主権限が100%大復活します！
     is_owner = True if uid == 'admin' else False
     return uid, un, is_owner
 
@@ -337,8 +348,8 @@ def login():
     res = remote_api("api/login", {"uid": request.form['uid'], "pw": request.form['pw']})
     if res.get("status") == "ok":
         resp = make_response(redirect('/'))
-        resp.set_cookie('uid', str(res.get('uid')), max_age=60*60*24*30)
-        resp.set_cookie('un', str(res.get('un')), max_age=60*60*24*30)
+        resp.set_cookie('uid', clean_str(res.get('uid')), max_age=60*60*24*30)
+        resp.set_cookie('un', clean_str(res.get('un')), max_age=60*60*24*30)
         return resp
     flash("ユーザーIDまたはパスワードが違います")
     return redirect('/login_form')
@@ -357,7 +368,9 @@ def api_local_get_threads(cid):
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, dict): threads.append({"id": str(t['id']), "title": str(t['title'])})
-    return jsonify({"threads": threads, "members": res.get("members", [])})
+    
+    cleaned_members = [clean_str(m) for m in res.get("members", [])]
+    return jsonify({"threads": threads, "members": cleaned_members})
 
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
@@ -366,8 +379,10 @@ def api_local_get_posts(cid, tid):
         return jsonify({"error": "not_found"})
     posts = []
     for p in res.get("posts", []):
-        if isinstance(p, dict): posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-    return jsonify({"posts": posts, "members": res.get("members", [])})
+        if isinstance(p, dict): posts.append({"id": str(p['id']), "n": clean_str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+    
+    cleaned_members = [clean_str(m) for m in res.get("members", [])]
+    return jsonify({"posts": posts, "members": cleaned_members})
 
 @app.route('/find_class', methods=['POST'])
 def find_class():
@@ -410,7 +425,9 @@ def v_class(cid):
     threads = []
     for t in res.get("threads", []):
         if isinstance(t, dict): threads.append({"id": str(t['id']), "title": str(t['title'])})
-    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=res.get("members", []), is_owner=is_owner, login_user=un)
+    
+    cleaned_members = [clean_str(m) for m in res.get("members", [])]
+    return render_template_string(HTML, v='class', cid=cid, cname=str(res.get("cname", "不明")), items=threads, members=cleaned_members, is_owner=is_owner, login_user=un)
 
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
@@ -433,8 +450,10 @@ def v_thread(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
     posts = []
     for p in res.get("posts", []):
-        if isinstance(p, dict): posts.append({"id": str(p['id']), "n": str(p['n']), "b": str(p['b']), "d": str(p['d'])})
-    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=res.get("members", []), is_owner=is_owner, login_user=un)
+        if isinstance(p, dict): posts.append({"id": str(p['id']), "n": clean_str(p['n']), "b": str(p['b']), "d": str(p['d'])})
+    
+    cleaned_members = [clean_str(m) for m in res.get("members", [])]
+    return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=str(res.get("tname", "不明")), items=posts, members=cleaned_members, is_owner=is_owner, login_user=un)
 
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
