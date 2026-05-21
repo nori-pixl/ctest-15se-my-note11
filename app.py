@@ -1,7 +1,7 @@
 import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v125_ultimate"
+app.secret_key = "bbs_final_perfect_v126_ultimate"
 TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
@@ -61,7 +61,6 @@ def index():
     items = []
     raw_items = res.get("items", []) if isinstance(res, dict) else []
     for i in raw_items:
-        # 💡 ここでカッコや辞書型データのズレをすべてピュアな文字に修正します
         if isinstance(i, dict):
             cid = clean_str(i.get('id'))
             cn = clean_str(i.get('name'))
@@ -90,8 +89,6 @@ def login():
 @app.route('/logout')
 def logout():
     resp = make_response(redirect('/login_form')); resp.delete_cookie('uid'); resp.delete_cookie('un'); return resp
-
-# 💡 【1番重要】1秒ごとのリアルタイム通信が叩きにくる窓口も、カッコを力ずくで剥ぎ取る仕様に大改造しました！
 @app.route('/api_local/get_threads/<int:cid>')
 def api_local_get_threads(cid):
     res = remote_api("api/get_class_detail", {"cid": cid})
@@ -102,8 +99,6 @@ def api_local_get_threads(cid):
         if isinstance(t, dict):
             threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
     return jsonify({"threads": threads, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
-
-# 💡 【2番重要】コメント自動追加の窓口も、画像Base64を壊さずにテキストデータだけ綺麗にお掃除します！
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
     res = remote_api("api/get_thread_detail", {"tid": tid})
@@ -114,7 +109,6 @@ def api_local_get_posts(cid, tid):
         if isinstance(p, dict):
             posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
     return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
-
 @app.route('/find_class', methods=['POST'])
 def find_class():
     uid, un = check_login()
@@ -213,4 +207,5 @@ def del_p(cid, tid, pid):
         return redirect(url_for('v_thread', cid=cid, tid=tid))
     remote_api("api/del_post", {"pid": pid}); return redirect(url_for('v_thread', cid=cid, tid=tid))
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.envir
+    # 💡 途切れていた「os.environ.get('PORT', 8000)」を完璧に書き直しました！
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
