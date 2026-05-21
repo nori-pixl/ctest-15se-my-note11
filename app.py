@@ -4,7 +4,7 @@ from flask import Flask, render_template_string, request, redirect, url_for, mak
 app = Flask(__name__)
 app.secret_key = "bbs_render_gateway_final_perfect_v96_fixed_final"
 
-# ⚠️ あなたの最新のCloudflare Tunnelの裏口URLを設定したままにしています
+
 TUNNEL_URL = "https://capitol-plymouth-sheer-regulation.trycloudflare.com"
 
 HTML = """
