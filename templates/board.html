@@ -13,6 +13,8 @@
         .post-meta { font-weight: bold; color: #228b22; }
         .post-body { margin: 5px 0 5px 20px; white-space: pre-wrap; word-break: break-all; }
         .error-msg { color: #ff0000; font-weight: bold; margin-bottom: 10px; }
+        .progress-bar { width: 100%; background-color: #ddd; display: none; margin-top: 5px; }
+        .progress-fill { width: 0%; height: 10px; background-color: #4caf50; text-align: center; line-height: 10px; color: white; font-size: 8px; }
     </style>
 </head>
 <body>
@@ -21,6 +23,8 @@
     {% with messages = get_flashed_messages() %}
       {% if messages %}{% for message in messages %}<div class="error-msg">[注意] {{ message }}</div>{% endfor %}{% endif %}
     {% endwith %}
+
+    <div id="flash-area" class="error-msg"></div>
 
     {% if v == 'class' %}
         <div class="thread-title">{{ cname }} - スレッド一覧</div>
@@ -60,7 +64,6 @@
                     <span class="post-meta">{{ loop.index }} : 名前: {{ p.n }} : {{ p.d }} ID: {{ p.id }}</span>
                     <form method="POST" action="/del_p/{{ cid }}/{{ tid }}/{{ p.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
                     <div class="post-body">{{ p.b }}</div>
-                    <!-- 🖼️ 画像表示用のタグを追加 -->
                     {% if p.img %}
                         <div style="margin-left: 20px; margin-top: 5px;">
                             <a href="{{ p.img }}" target="_blank">
@@ -75,12 +78,15 @@
         <div class="thread-title">{{ tname }} への書き込み</div>
         [<a href="/c/{{ cid }}/t/{{ tid }}">キャンセルして戻る</a>]
         <hr>
-        <form method="POST" action="/c/{{ cid }}/t/{{ tid }}/p" enctype="multipart/form-data">
+        <form id="chunk-upload-form" onsubmit="handleChunkUpload(event)">
             <table border="0">
-                <tr><td>名前:</td><td><input type="text" name="name" value="名無しさん" style="width: 250px;"></td></tr>
-                <tr><td valign="top">本文:</td><td><textarea name="b" required style="width: 250px; height: 80px;"></textarea></td></tr>
-                <tr><td>画像:</td><td><input type="file" name="image" accept="image/*" {% if count >= 5 %}disabled{% endif %}></td></tr>
-                <tr><td></td><td><button type="submit">書き込む</button></td></tr>
+                <tr><td>名前:</td><td><input type="text" id="input-name" value="名無しさん" style="width: 250px;"></td></tr>
+                <tr><td valign="top">本文:</td><td><textarea id="input-body" required style="width: 250px; height: 80px;"></textarea></td></tr>
+                <tr><td>画像:</td><td><input type="file" id="input-image" accept="image/*" {% if count >= 5 %}disabled{% endif %}></td></tr>
+                <tr><td></td><td>
+                    <button type="submit" id="submit-btn">書き込む</button>
+                    <div class="progress-bar" id="p-bar"><div class="progress-fill" id="p-fill">0%</div></div>
+                </td></tr>
             </table>
         </form>
     {% endif %}
@@ -89,6 +95,86 @@
             var exp = /(https?:\/\/[^\s]+)/g;
             el.innerHTML = el.innerHTML.replace(exp, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
         });
+
+        async function handleChunkUpload(e) {
+            e.preventDefault();
+            const name = document.getElementById('input-name').value;
+            const body = document.getElementById('input-body').value;
+            const fileInput = document.getElementById('input-image');
+            const submitBtn = document.getElementById('submit-btn');
+            const pBar = document.getElementById('p-bar');
+            const pFill = document.getElementById('p-fill');
+            const flashArea = document.getElementById('flash-area');
+
+            flashArea.innerText = '';
+            submitBtn.disabled = true;
+
+            // 画像がない場合は通常送信
+            if (!fileInput || fileInput.files.length === 0) {
+                const res = await fetch('/c/{{ cid }}/t/{{ tid }}/p', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: `name=${encodeURIComponent(name)}&b=${encodeURIComponent(body)}`
+                });
+                window.location.href = '/c/{{ cid }}/t/{{ tid }}';
+                return;
+            }
+
+            const file = fileInput.files[0];
+            
+            // 🛑 5MB（5 * 1024 * 1024 バイト）以上のファイルを禁止するチェック処理を追加
+            const maxSizeBytes = 5 * 1024 * 1024;
+            if (file.size > maxSizeBytes) {
+                flashArea.innerText = '[注意] 5MBを超える画像はアップロードできません。';
+                submitBtn.disabled = false;
+                return;
+            }
+
+            const totalChunks = 10;
+            const chunkSize = Math.ceil(file.size / totalChunks);
+            const uploadId = crypto.randomUUID();
+
+            pBar.style.display = 'block';
+
+            // 10分割して順番に送信
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * chunkSize;
+                const end = Math.min(start + chunkSize, file.size);
+                const chunk = file.slice(start, end);
+
+                const formData = new FormData();
+                formData.append('image_chunk', chunk);
+                formData.append('upload_id', uploadId);
+                formData.append('chunk_index', i);
+                formData.append('total_chunks', totalChunks);
+                formData.append('filename', file.name);
+                formData.append('content_type', file.type);
+
+                if (i === totalChunks - 1) {
+                    formData.append('name', name);
+                    formData.append('b', body);
+                }
+
+                const res = await fetch('/c/{{ cid }}/t/{{ tid }}/p_chunk', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const errText = await res.text();
+                    flashArea.innerText = '[注意] ' + errText;
+                    submitBtn.disabled = false;
+                    pBar.style.display = 'none';
+                    return;
+                }
+
+                const progress = Math.round(((i + 1) / totalChunks) * 100);
+                pFill.style.width = progress + '%';
+                pFill.innerText = progress + '%';
+            }
+
+            window.location.href = '/c/{{ cid }}/t/{{ tid }}';
+        }
     </script>
 </body>
 </html>
