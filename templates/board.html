@@ -64,11 +64,10 @@
                     <span class="post-meta">{{ loop.index }} : 名前: {{ p.n }} : {{ p.d }} ID: {{ p.id }}</span>
                     <form method="POST" action="/del_p/{{ cid }}/{{ tid }}/{{ p.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
                     <div class="post-body">{{ p.b }}</div>
+                    <!-- 🛠️ 画像を直接出さず、保存先URLのテキストリンクとして表示するよう変更 -->
                     {% if p.img %}
-                        <div style="margin-left: 20px; margin-top: 5px;">
-                            <a href="{{ p.img }}" target="_blank">
-                                <img src="{{ p.img }}" style="max-width: 100%; max-height: 200px; border: 1px solid #ccc;" onerror="this.onerror=null; this.src=''; this.insertAdjacentHTML('beforebegin', '<span style=color:#666;font-size:0.8em;>[注意] この画像は1日が経過したため自動削除されました</span>'); this.remove();">
-                            </a>
+                        <div style="margin-left: 20px; margin-top: 5px; font-size: 0.9em;">
+                            添付画像: <a href="{{ p.img }}" target="_blank" rel="noopener noreferrer">{{ p.img }}</a>
                         </div>
                     {% endif %}
                 </div>
@@ -109,7 +108,6 @@
             flashArea.innerText = '';
             submitBtn.disabled = true;
 
-            // 画像がない場合は通常送信
             if (!fileInput || fileInput.files.length === 0) {
                 const res = await fetch('/c/{{ cid }}/t/{{ tid }}/p', {
                     method: 'POST',
@@ -121,8 +119,6 @@
             }
 
             const file = fileInput.files[0];
-            
-            // 🛑 5MB（5 * 1024 * 1024 バイト）以上のファイルを禁止するチェック処理を追加
             const maxSizeBytes = 5 * 1024 * 1024;
             if (file.size > maxSizeBytes) {
                 flashArea.innerText = '[注意] 5MBを超える画像はアップロードできません。';
@@ -136,7 +132,6 @@
 
             pBar.style.display = 'block';
 
-            // 10分割して順番に送信
             for (let i = 0; i < totalChunks; i++) {
                 const start = i * chunkSize;
                 const end = Math.min(start + chunkSize, file.size);
