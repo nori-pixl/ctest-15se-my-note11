@@ -60,6 +60,14 @@
                     <span class="post-meta">{{ loop.index }} : 名前: {{ p.n }} : {{ p.d }} ID: {{ p.id }}</span>
                     <form method="POST" action="/del_p/{{ cid }}/{{ tid }}/{{ p.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
                     <div class="post-body">{{ p.b }}</div>
+                    <!-- 🖼️ 画像表示用のタグを追加 -->
+                    {% if p.img %}
+                        <div style="margin-left: 20px; margin-top: 5px;">
+                            <a href="{{ p.img }}" target="_blank">
+                                <img src="{{ p.img }}" style="max-width: 100%; max-height: 200px; border: 1px solid #ccc;" onerror="this.onerror=null; this.src=''; this.insertAdjacentHTML('beforebegin', '<span style=color:#666;font-size:0.8em;>[注意] この画像は1日が経過したため自動削除されました</span>'); this.remove();">
+                            </a>
+                        </div>
+                    {% endif %}
                 </div>
             {% endfor %}
         </div>
