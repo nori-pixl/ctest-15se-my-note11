@@ -1,143 +1,103 @@
 import os
+import datetime
 import requests
-import uuid
-import pymysql
-from flask import Flask, request, jsonify
+from flask import Flask, request, redirect, render_template, make_response, url_for, flash
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("SECRET_KEY", "temporary_secret_key_string")
+TERMUX_API_BASE = os.environ.get("TERMUX_API_URL", "https://trycloudflare.com")
 
-# ==========================================
-# 設定（MySQLの接続情報のみ）
-# ==========================================
-MYSQL_CONFIG = {
-    'user': 'root',
-    'password': '',
-    'host': '127.0.0.1',
-    'database': 'board_db',
-    'cursorclass': pymysql.cursors.DictCursor
-}
+def get_image_upload_count():
+    return int(request.cookies.get('img_upload_count', 0))
 
-# MySQLへの通信ヘルパー関数
-def query_mysql(sql, params=[], is_select=True, return_insert_id=False):
-    try:
-        conn = pymysql.connect(**MYSQL_CONFIG)
-        with conn.cursor() as cursor:
-            cursor.execute(sql, params)
-            if is_select:
-                result = cursor.fetchall()
-            else:
-                conn.commit()
-                result = conn.insert_id() if return_insert_id else True
-        conn.close()
-        return result
-    except Exception as e:
-        print("MySQL Error:", e)
-        return [] if is_select else False
+@app.route('/')
+def index():
+    return redirect('/c/1')
 
-# 1. クラス詳細（一般クラス固定）のスレッド一覧取得
-@app.route('/api/class/1', methods=['GET'])
-def get_class_detail():
-    threads = query_mysql("SELECT * FROM threads WHERE class_id = 1 ORDER BY id DESC")
-    return jsonify({
-        "success": True,
-        "class": {"id": 1, "name": "一般クラス"},
-        "threads": threads
-    })
+@app.route('/remove_from_list/<int:tid>', methods=['POST'])
+def remove_from_list(tid):
+    vlist = request.cookies.get('vlist', '').split(',')
+    if str(tid) in vlist: vlist.remove(str(tid))
+    resp = make_response(redirect('/c/1'))
+    resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
+    return resp
 
-# 2. 特定スレッドの情報と投稿一覧の取得
-@app.route('/api/thread/<int:tid>', methods=['GET'])
-def get_thread_detail(tid):
-    thread_rows = query_mysql("SELECT * FROM threads WHERE id = %s", [tid])
-    if not thread_rows:
-        return jsonify({"success": False, "message": "Thread not found"}), 404
-    
-    # 辞書型として安全に抽出
-    thread_data = thread_rows[0] if isinstance(thread_rows, list) and len(thread_rows) > 0 else thread_rows
-    posts = query_mysql("SELECT * FROM posts WHERE thread_id = %s ORDER BY id ASC", [tid])
-    return jsonify({
-        "success": True,
-        "thread": thread_data,
-        "posts": posts
-    })
-# 3. 新規スレッドの作成 ＆ 最初の本文を投稿1番目として登録（エラー対策版）
-@app.route('/api/threads', methods=['POST'])
-def create_thread():
-    data = request.json
-    if not data:
-        return jsonify({"success": False, "message": "No data received"}), 400
+@app.route('/c/<int:cid>')
+def v_class(cid):
+    if cid != 1: return redirect('/')
+    try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
+    except: res = {}
+    return render_template('board.html', v='class', cid=cid, cname=res.get("class", {}).get("name", "一般クラス"), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user="名無しさん")
 
-    class_id = data.get("class_id", 1)
-    title = data.get("title", "無題")
-    body = data.get("body", "")
-    name = data.get("n", "名無しさん")
-    date_str = data.get("d", "")
+@app.route('/c/<int:cid>/create_form')
+def create_form(cid):
+    if cid != 1: return redirect('/')
+    return render_template('board.html', v='create_form', cid=cid, login_user="名無しさん")
 
-    # スレッドをMySQLに挿入し、新規発行されたIDを取得
-    tid = query_mysql(
-        "INSERT INTO threads (class_id, title) VALUES (%s, %s)", 
-        [class_id, title], 
-        is_select=False, 
-        return_insert_id=True
-    )
-    
-    if not tid:
-        print("Failed to insert thread into MySQL.")
-        return jsonify({"success": False}), 500
-    
-    # 最初の本文を「posts」テーブルに1番目のレスとして挿入
-    # D1移植時のカラム名（n, b, d, img）の不一致を防ぐため、安全なクエリを発行
-    query_mysql(
-        "INSERT INTO posts (thread_id, n, b, d, img) VALUES (%s, %s, %s, %s, %s)",
-        [tid, name, body, date_str, ""],
-        is_select=False
-    )
-    
-    return jsonify({"success": True, "tid": tid})
+@app.route('/c/<int:cid>/new', methods=['POST'])
+def new_t(cid):
+    if cid != 1: return redirect('/')
+    title, body = request.form.get('t'), request.form.get('b')
+    if title and body:
+        try:
+            res = requests.post(f"{TERMUX_API_BASE}/api/threads", json={"class_id": cid, "title": title, "body": body, "n": "名無しさん", "d": datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10).json()
+            tid = res.get("tid")
+            if tid:
+                vlist = request.cookies.get('vlist', '').split(',')
+                if str(tid) not in vlist: vlist.append(str(tid))
+                resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
+                resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
+                return resp
+        except: flash("スレッド作成エラー")
+    return redirect(url_for('v_class', cid=cid))
 
-# 4. 新しい投稿（レス）の追加処理
-@app.route('/api/posts', methods=['POST'])
-def create_post():
-    name = request.form.get("name", "名無しさん")
-    message = request.form.get("b", "") or request.form.get("message", "")
-    thread_id = request.form.get("thread_id")
-    date_str = request.form.get("d", "")
-    image_url = ""
+@app.route('/c/<int:cid>/t/<int:tid>')
+def v_thread(cid, tid):
+    if cid != 1: return redirect('/')
+    try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
+    except: res = {}
+    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=res.get("thread", {}).get('title', '不明') if isinstance(res.get("thread"), dict) else "不明", items=res.get("posts", []), login_user="名無しさん", count=get_image_upload_count())
 
-    # JSON形式リクエストでのフォールバック
-    if not thread_id and request.json:
-        data = request.json
-        name = data.get("name", "名無しさん")
-        message = data.get("body", "") or data.get("message", "")
-        thread_id = data.get("thread_id")
-        date_str = data.get("d", "")
+@app.route('/c/<int:cid>/t/<int:tid>/post_form')
+def post_form(cid, tid):
+    if cid != 1: return redirect('/')
+    try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
+    except: res = {}
+    tname = res.get("thread", {}).get("title", "不明") if isinstance(res.get("thread"), dict) else "不明"
+    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=tname, login_user="名無しさん", count=get_image_upload_count())
 
-    query_mysql(
-        "INSERT INTO posts (thread_id, n, b, d, img) VALUES (%s, %s, %s, %s, %s)",
-        [thread_id, name, message, date_str, image_url],
-        is_select=False
-    )
-    return jsonify({"success": True})
+@app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
+def post(cid, tid):
+    if cid != 1: return redirect('/')
+    name, message, file = request.form.get('name', '名無しさん'), request.form.get('b', ''), request.files.get('image')
+    upload_count, img_uploaded = get_image_upload_count(), False
+    if file and file.filename != '':
+        if upload_count >= 5:
+            flash("画像のアップロードは1日合計5枚までです。")
+            return redirect(url_for('v_thread', cid=cid, tid=tid))
+        try:
+            if requests.post(f"{TERMUX_API_BASE}/api/posts", data={'name': name, 'message': message, 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, files={'image': (file.filename, file.stream, file.content_type)}, timeout=30).json().get("success"): img_uploaded = True
+        except: flash("画像転送エラー")
+    else:
+        try: requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': name, 'message': message, 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10)
+        except: flash("投稿エラー")
+    resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
+    if img_uploaded: resp.set_cookie('img_upload_count', str(upload_count + 1), expires=datetime.datetime.combine(datetime.datetime.now().date() + datetime.timedelta(days=1), datetime.time.min))
+    return resp
 
-# 5. 【削除機能】スレッドの完全削除
-@app.route('/api/del_thread', methods=['POST'])
-def delete_thread():
-    data = request.json
-    tid = data.get("tid")
-    if tid:
-        query_mysql("DELETE FROM posts WHERE thread_id = %s", [tid], is_select=False)
-        query_mysql("DELETE FROM threads WHERE id = %s", [tid], is_select=False)
-    return jsonify({"success": True})
+@app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
+def del_t(cid, tid):
+    try: requests.post(f"{TERMUX_API_BASE}/api/del_thread", json={"tid": tid}, timeout=10)
+    except: flash("削除通信エラー")
+    return redirect(url_for('v_class', cid=cid))
 
-# 6. 【削除機能】特定の投稿（レス）の削除
-@app.route('/api/del_post', methods=['POST'])
-def delete_post():
-    data = request.json
-    pid = data.get("pid")
-    if pid:
-        query_mysql("DELETE FROM posts WHERE id = %s", [pid], is_select=False)
-    return jsonify({"success": True})
+@app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
+def del_p(cid, tid, pid):
+    try: requests.post(f"{TERMUX_API_BASE}/api/del_post", json={"pid": pid}, timeout=10)
+    except: flash("削除通信エラー")
+    return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    # タブレットのTermuxローカル環境（ポート7000）で起動
+    # ⚠️ Render側の自動ポート認識に合わせるため設定変数を読み込む（7000固定はNG）
     port = int(os.environ.get('PORT', 8000))
     app.run(host='0.0.0.0', port=port)
