@@ -2,7 +2,7 @@ import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
 app.secret_key = "bbs_final_perfect_v128_ultimate_half"
-TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
+TUNNEL_URL = "https://tim-advisors-novel-varieties.trycloudflare.com"
 
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
