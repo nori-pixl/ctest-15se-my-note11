@@ -139,4 +139,5 @@ def delete_post():
 
 if __name__ == '__main__':
     # タブレットのTermuxローカル環境（ポート7000）で起動
-    app.run(host='0.0.0.0', port=7000)
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
