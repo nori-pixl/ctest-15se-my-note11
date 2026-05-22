@@ -1,16 +1,15 @@
 import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v128_ultimate_half"
+app.secret_key = "bbs_final_perfect_v136_ultimate"
 TUNNEL_URL = "https://tim-advisors-novel-varieties.trycloudflare.com"
-
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
 <style>body{font-family:monospace;background:#eee;padding:15px;color:#333;}.box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}.post{border-bottom:1px solid #ccc;padding:10px 0;}.del-btn{background:#ffcccc;cursor:pointer;font-size:0.7em;border:1px solid #999;float:right;}.id-info{background:#e3f2fd;color:#1565c0;padding:5px;border-radius:3px;font-weight:bold;display:inline-block;margin-bottom:10px;}.nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}.member-box{background:#f9f9f9;border:1px dashed #bbb;padding:8px;font-size:0.85em;color:#666;margin-bottom:15px;}.error-screen{background:#fff;border:2px solid #ff5252;padding:20px;margin:20px auto;max-width:500px;text-align:center;}.posted-img{max-width:80%;max-height:200px;display:block;margin-top:8px;border:1px solid #ccc;}</style>
 {% if v == 'class' %}<script>var existingThreadIds = new Set();document.addEventListener("DOMContentLoaded", function() {var ts = document.getElementsByClassName('thread-block');for(var i=0; i<ts.length; i++) { existingThreadIds.add(ts[i].getAttribute('data-id')); }});
-var checkTimer = setInterval(function(){fetch('/api_local/get_threads/{{cid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.threads){var container = document.getElementById('threads-container');d.threads.forEach((t)=>{if(!existingThreadIds.has(String(t.id))){existingThreadIds.add(String(t.id));var li=document.createElement('li');li.className='thread-block';li.setAttribute('data-id',t.id);li.style.marginBottom='12px';li.style.fontSize='1.1em';li.innerHTML='[スレ] <a href="/c/{{cid}}/t/'+t.id+'"><b>'+t.title+'</b></a> <form method="POST" action="/del_t/{{cid}}/'+t.id+'" style="display:inline;"><input type="submit" value="削除" class="del-btn" onclick="return confirm(\\'消去しますか？\\')"></form>';container.appendChild(li);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>なぜこれが表示されてますか?</b></p><p>作成主が削除した可能性があります。</p><p>作成主に連絡を推奨します。</p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
+var checkTimer = setInterval(function(){fetch('/api_local/get_threads/{{cid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.threads){var container = document.getElementById('threads-container');d.threads.forEach((t)=>{if(!existingThreadIds.has(String(t.id))){existingThreadIds.add(String(t.id));var li=document.createElement('li');li.className='thread-block';li.setAttribute('data-id',t.id);li.style.marginBottom='12px';li.style.fontSize='1.1em';li.innerHTML='[スレ] <a href="/c/{{cid}}/t/'+t.id+'"><b>'+t.title+'</b></a> <form method="POST" action="/del_t/{{cid}}/'+t.id+'" style="display:inline;"><input type="submit" value="削除" class="del-btn" onclick="return confirm(\\'消去しますか？\\')"></form>';container.appendChild(li);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>作成主が削除した可能性があります。</b></p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
 {% if v == 'thread' %}<script>var existingPostIds = new Set();document.addEventListener("DOMContentLoaded", function() {var ps = document.getElementsByClassName('post-block');for(var i=0; i<ps.length; i++) { existingPostIds.add(ps[i].getAttribute('data-id')); }});
-var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{tid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.posts){var container = document.getElementById('posts-container');var currentCount = container.getElementsByClassName('post-block').length;d.posts.forEach((p, index)=>{if(!existingPostIds.has(String(p.id))){existingPostIds.add(String(p.id));currentCount++;var div=document.createElement('div');div.className='post post-block';div.setAttribute('data-id',p.id);var imgHtml = p.img ? '<img src="'+p.img+'" class="posted-img">' : '';div.innerHTML=currentCount+': <b>'+p.n+'</b> ['+p.d+'] <a href="/c/{{cid}}/t/{{tid}}/post_form?r='+currentCount+'">[返信]</a> <form method="POST" action="/del_p/{{cid}}/{{tid}}/'+p.id+'" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">'+p.b+'</div>'+imgHtml;container.appendChild(div);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>なぜこれが表示されてますか?</b></p><p>作成主が削除した可能性があります。</p><p>作成主に連絡を推奨します。</p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
+var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{tid}}').then(r => r.json()).then(d => {if(d.error==='not_found'){clearInterval(checkTimer);showDeleteError();return;}if(d.members){document.getElementById('member-count').innerText=d.members.length;document.getElementById('member-list').innerText=d.members.join(', ');}if(d.posts){var container = document.getElementById('posts-container');var currentCount = container.getElementsByClassName('post-block').length;d.posts.forEach((p, index)=>{if(!existingPostIds.has(String(p.id))){existingPostIds.add(String(p.id));currentCount++;var div=document.createElement('div');div.className='post post-block';div.setAttribute('data-id',p.id);var imgHtml = p.img ? '<img src="'+p.img+'" class="posted-img">' : '';div.innerHTML=currentCount+': <b>'+p.n+'</b> ['+p.d+'] <a href="/c/{{cid}}/t/{{tid}}/post_form?r='+currentCount+'">[返信]</a> <form method="POST" action="/del_p/{{cid}}/{{tid}}/'+p.id+'" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">'+p.b+'</div>'+imgHtml;container.appendChild(div);}})}});},1000);function showDeleteError(){document.body.innerHTML='<div class="error-screen"><h2 style="color:#ff5252;margin-top:0;">error:404 notfound ページが見つかりません。</h2><p><b>作成主が削除した可能性があります。</b></p><br><a href="/" class="nav-btn" style="background:#2196f3;color:#fff;border:none;padding:10px 20px;">ホームにもどる</a></div>';}</script>{% endif %}
 </head><body><h1><a href="/">秘密の掲示板</a></h1>{% if login_user %}<div style="text-align:right;font-size:0.8em;">ログイン中: <b>{{login_user}}</b> | <a href="/logout">[ ログアウト ]</a></div>{% endif %}<hr>
 {% with msgs = get_flashed_messages() %}{% for m in msgs %}<p style="color:red;">{{m}}</p>{% endfor %}{% endwith %}
 {% if v == 'login' %}<h2>[ ログイン ]</h2><div class="box"><form method="POST" action="/login">ユーザーID:<br><input name="uid" required style="width:90%;"><br><br>パスワード:<br><input type="password" name="pw" required style="width:90%;"><br><br><input type="submit" value="ログイン"></form></div><p><a href="/register_form">[ 新規アカウント作成はこちら ]</a></p>
@@ -18,7 +17,7 @@ var checkTimer = setInterval(function(){fetch('/api_local/get_posts/{{cid}}/{{ti
 {% elif v == 'menu' %}<h2>表示中のクラス</h2><ul>{% for c in items %}<li style="margin-bottom:12px;"><a href="/c/{{c.id}}"><b>{{c.name}}</b></a>{% if c.id != '1' and c.id != 1 %}<form method="POST" action="/remove_from_list/{{c.id}}" style="display:inline;margin-left:10px;"><input type="submit" value="非表示" style="font-size:0.7em;"></form>{% endif %}</li>{% endfor %}</ul><hr><div class="box"><h3>クラスを呼び出す(5桁ID)</h3><form method="POST" action="/find_class"><input name="fid" required style="width:80px;"> <input type="submit" value="追加"></form></div><div class="box"><h3>新クラス作成</h3><form method="POST" action="/add_c"><input name="cn" required placeholder="クラス名"> <input type="submit" value="作成"></form></div>
 {% elif v == 'class' %}<div class="id-info">このクラスのID: {{cid}}</div><br><h2>クラス: {{cname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/" class="nav-btn">[ メニューに戻る ]</a><a href="/c/{{cid}}/create_form" class="nav-btn" style="background:#ccffcc;margin-left:10px;">[ 新規スレ作成画面へ ]</a><hr><h3>スレ一覧 (自動追加モード)</h3><ul id="threads-container">{% for t in items %}<li class="thread-block" data-id="{{t.id}}" style="margin-bottom:12px;font-size:1.1em;">[スレ] <a href="/c/{{cid}}/t/{{t.id}}"><b>{{t.title}}</b></a> <form method="POST" action="/del_t/{{cid}}/{{t.id}}" style="display:inline;"><input type="submit" value="削除" class="del-btn" onclick="return confirm('消去しますか？')"></form></li>{% endfor %}</ul>
 {% if cid|string != '1' and cid|int != 1 %}<hr><form method="POST" action="/del_c/{{cid}}"><input type="submit" value="このクラスを完全に削除する" class="del-btn" style="float:none; background:#ff5252; color:white; border:none; padding:5px 10px;" onclick="return confirm('全データが消えますが本当によろしいですか？')"></form>{% endif %}
-{% elif v == 'create_form' %}<h2>新規スレッド作成</h2><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><hr><div class="box" style="border:2px solid #4caf50;"><form method="POST" action="/c/{{cid}}/new"><b>タイトル:</b><br><input name="t" required style="width:95%;padding:5px;"><br><br><b>最初の本文:</b><br><textarea name="b" required style="width:95%;height:100px;padding:5px;"></textarea><br><br><input type="submit" value="この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>
+{% elif v == 'create_form' %}<h2>新規スレッド作成</h2><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><hr><div class="box" style="border:2px solid #4caf50;"><form method="POST" action="/c/{{cid}}/new"><b>タイトル:</b><br><input name="t" required style="width:95%;padding:5px;"><br><br><b>最初の本文:</b><br><textarea name="b" required style="width:95%;height:100px;padding:5pxを確認してください。"></textarea><br><br><input type="submit" value="この内容でスレッドを作成する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>
 {% elif v == 'thread' %}<div class="id-info">クラスID: {{cid}}</div><br><h2>スレッド: {{tname}}</h2><div class="member-box">[ 参加メンバー / 合計 <span id="member-count">{{ members|length }}</span>人 ]<br><span id="member-list">{% for m in members %}<b>{{m}}</b>{% if not loop.last %}, {% endif %}{% else %}まだ登録メンバーはいません{% endfor %}</span></div><a href="/c/{{cid}}" class="nav-btn">[ スレ一覧に戻る ]</a><a href="/c/{{cid}}/t/{{tid}}/post_form" class="nav-btn" style="background:#cce6ff;margin-left:10px;">[ このスレに書き込む ]</a><hr><h3>投稿一覧 (自動追加モード)</h3><div id="posts-container">{% for p in items %}<div class="post post-block" data-id="{{p.id}}">{{loop.index}}: <b>{{p.n}}</b> [{{p.d}}] <form method="POST" action="/del_p/{{cid}}/{{tid}}/{{p.id}}" style="display:inline;"><input type="submit" value="消" class="del-btn"></form><br><div style="white-space:pre-wrap;margin-left:10px;margin-top:5px;font-size:1.1em;">{{p.b}}</div>{% if p.img %}<img src="{{p.img}}" class="posted-img">{% endif %}</div>{% endfor %}</div>
 {% elif v == 'post_form' %}<h2>コメント書き込み</h2><a href="/c/{{cid}}/t/{{tid}}" class="nav-btn">[ スレに戻る ]</a><hr><div class="box" style="border:2px solid #2196f3;"><h4>スレ「{{tname}}」への返信</h4><form method="POST" action="/c/{{cid}}/t/{{tid}}/p" enctype="multipart/form-data"><b>コメント本文:</b><br><textarea name="b" required style="width:95%;height:120px;padding:5px;"></textarea><br><br><b>画像貼り付け (任意):</b><br><input type="file" name="f" accept="image/*"><br><br><input type="submit" value="書き込みを送信する" style="padding:10px;font-weight:bold;cursor:pointer;"></form></div>{% endif %}
 </body></html>
@@ -33,12 +32,6 @@ def clean_str(val):
     v = str(val)
     for c in ["(", ")", "'", ",", "[", "]", '"']: v = v.replace(c, "")
     return v.strip()
-def parse_item(data):
-    if isinstance(data, dict): return data
-    if isinstance(data, list):
-        if len(data) >= 5: return {"id": clean_str(data[0]), "n": clean_str(data[1]), "b": clean_str(data[2]), "d": clean_str(data[3]), "img": str(data[4])}
-        if len(data) >= 2: return {"id": clean_str(data[0]), "name": clean_str(data[1]), "title": clean_str(data[1])}
-    return {}
 def check_login(): return clean_str(request.cookies.get('uid')), clean_str(request.cookies.get('un'))
 DELETE_COUNTER = {"date": "", "count": 0}
 IMAGE_COUNTER = {"date": "", "count": 0}
@@ -68,8 +61,10 @@ def index():
     items = []
     raw_items = res.get("items", []) if isinstance(res, dict) else []
     for i in raw_items:
-        parsed = parse_item(i)
-        if parsed.get('id'): items.append({"id": parsed['id'], "name": parsed.get('name', '一般クラス')})
+        if isinstance(i, dict):
+            cid = clean_str(i.get('id'))
+            cn = clean_str(i.get('name'))
+            if cid: items.append({"id": cid, "name": cn if cn else "一般クラス"})
     return render_template_string(HTML, v='menu', items=items, login_user=un, new_cid=request.args.get('new_cid'))
 @app.route('/login_form')
 def login_form(): return render_template_string(HTML, v='login', login_user=None)
@@ -101,8 +96,7 @@ def api_local_get_threads(cid):
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        parsed = parse_item(t)
-        if parsed.get('id'): threads.append({"id": parsed['id'], "title": parsed.get('title', '無題')})
+        if isinstance(t, dict): threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
     return jsonify({"threads": threads, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/api_local/get_posts/<int:cid>/<int:tid>')
 def api_local_get_posts(cid, tid):
@@ -111,8 +105,7 @@ def api_local_get_posts(cid, tid):
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        parsed = parse_item(p)
-        if parsed.get('id'): posts.append({"id": parsed['id'], "n": parsed.get('n', '名無し'), "b": parsed.get('b', ''), "d": parsed.get('d', ''), "img": parsed.get('img', '')})
+        if isinstance(p, dict): posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
     return jsonify({"posts": posts, "members": [clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else []})
 @app.route('/find_class', methods=['POST'])
 def find_class():
@@ -148,8 +141,7 @@ def v_class(cid):
     threads = []
     raw_threads = res.get("threads", []) if isinstance(res, dict) else []
     for t in raw_threads:
-        parsed = parse_item(t)
-        if parsed.get('id'): threads.append({"id": parsed['id'], "title": parsed.get('title', '無題')})
+        if isinstance(t, dict): threads.append({"id": clean_str(t.get('id')), "title": clean_str(t.get('title'))})
     return render_template_string(HTML, v='class', cid=cid, cname=clean_str(res.get("cname", "不明")) if isinstance(res, dict) else "不明", items=threads, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid):
@@ -171,8 +163,7 @@ def v_thread(cid, tid):
     posts = []
     raw_posts = res.get("posts", []) if isinstance(res, dict) else []
     for p in raw_posts:
-        parsed = parse_item(p)
-        if parsed.get('id'): posts.append({"id": parsed['id'], "n": parsed.get('n', '名無し'), "b": parsed.get('b', ''), "d": parsed.get('d', ''), "img": parsed.get('img', '')})
+        if isinstance(p, dict): posts.append({"id": clean_str(p.get('id')), "n": clean_str(p.get('n')), "b": clean_str(p.get('b')), "d": clean_str(p.get('d')), "img": p.get('img', '')})
     return render_template_string(HTML, v='thread', cid=cid, tid=tid, tname=clean_str(res.get("tname", "不明")) if isinstance(res, dict) else "不明", items=posts, members=[clean_str(m) for m in res.get("members", [])] if isinstance(res, dict) else [], login_user=un)
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
