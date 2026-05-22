@@ -1,8 +1,9 @@
 import os, random, datetime, requests, base64
 from flask import Flask, render_template_string, request, redirect, url_for, make_response, flash, jsonify
 app = Flask(__name__)
-app.secret_key = "bbs_final_perfect_v127_ultimate"
+app.secret_key = "bbs_final_perfect_v128_ultimate_half"
 TUNNEL_URL = "https://street-handbook-basically-lisa.trycloudflare.com"
+
 HTML = """
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>秘密の掲示板</title>
 <style>body{font-family:monospace;background:#eee;padding:15px;color:#333;}.box{background:#fff;border:1px solid #ccc;padding:10px;margin:10px 0;width:95%;max-width:500px;}.post{border-bottom:1px solid #ccc;padding:10px 0;}.del-btn{background:#ffcccc;cursor:pointer;font-size:0.7em;border:1px solid #999;float:right;}.id-info{background:#e3f2fd;color:#1565c0;padding:5px;border-radius:3px;font-weight:bold;display:inline-block;margin-bottom:10px;}.nav-btn{display:inline-block;background:#e0e0e0;color:#333;text-decoration:none;padding:5px 10px;font-size:0.8em;border:1px solid #999;margin-bottom:10px;}.member-box{background:#f9f9f9;border:1px dashed #bbb;padding:8px;font-size:0.85em;color:#666;margin-bottom:15px;}.error-screen{background:#fff;border:2px solid #ff5252;padding:20px;margin:20px auto;max-width:500px;text-align:center;}.posted-img{max-width:80%;max-height:200px;display:block;margin-top:8px;border:1px solid #ccc;}</style>
@@ -33,7 +34,6 @@ def clean_str(val):
     for c in ["(", ")", "'", ",", "[", "]", '"']: v = v.replace(c, "")
     return v.strip()
 def parse_item(data):
-    # 💡 辞書型・リスト型のどちらでデータが届いても、100%安全に文字データを救出するハイブリッドパーサー
     if isinstance(data, dict): return data
     if isinstance(data, list):
         if len(data) >= 5: return {"id": clean_str(data[0]), "n": clean_str(data[1]), "b": clean_str(data[2]), "d": clean_str(data[3]), "img": str(data[4])}
@@ -63,7 +63,7 @@ def check_image_limit():
 @app.route('/')
 def index():
     uid, un = check_login()
-    if not uid: return render_template_string(HTML, v='login', login_user=None)
+    if not uid: return redirect('/login_form')
     res = remote_api("api/get_classes", {"vlist": request.cookies.get('vlist', '1').split(',')})
     items = []
     raw_items = res.get("items", []) if isinstance(res, dict) else []
@@ -210,4 +210,8 @@ def del_t(cid, tid):
 @app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
     if not check_delete_limit():
-        fl
+        flash("本日の削除回数の上限(5回)に達しました。削除できません")
+        return redirect(url_for('v_thread', cid=cid, tid=tid))
+    remote_api("api/del_post", {"pid": pid}); return redirect(url_for('v_thread', cid=cid, tid=tid))
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
