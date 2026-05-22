@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BBS</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #fffff0; color: #000000; padding: 20px; }
+        a { color: #0000ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .box { background: #fafafa; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .thread-title { font-size: 1.2em; font-weight: bold; color: #ff0000; margin-bottom: 5px; }
+        .post-box { border-bottom: 1px solid #ccc; padding: 10px 0; }
+        .post-meta { font-weight: bold; color: #228b22; }
+        .post-body { margin: 5px 0 5px 20px; white-space: pre-wrap; word-break: break-all; }
+        .error-msg { color: #ff0000; font-weight: bold; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div>ログイン中: {{ login_user }}</div>
+    <hr>
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}{% for message in messages %}<div class="error-msg">[注意] {{ message }}</div>{% endfor %}{% endif %}
+    {% endwith %}
+
+    {% if v == 'class' %}
+        <div class="thread-title">{{ cname }} - スレッド一覧</div>
+        [<a href="/c/{{ cid }}/create_form">新しいスレッドを建てる</a>]
+        <hr>
+        <div>
+            {% if not items %}<p>まだスレッドがありません。</p>{% endif %}
+            {% for t in items %}
+                <div class="box">
+                    <a href="/c/{{ cid }}/t/{{ t.id }}">{{ loop.index }}: {{ t.title }}</a>
+                    {% if t.id|string in vlist %}
+                        <form method="POST" action="/remove_from_list/{{ t.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">お気に入り解除</button></form>
+                    {% endif %}
+                    <form method="POST" action="/del_t/{{ cid }}/{{ t.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
+                </div>
+            {% endfor %}
+        </div>
+    {% elif v == 'create_form' %}
+        <div class="thread-title">新しいスレッドを建てる</div>
+        [<a href="/c/{{ cid }}">キャンセルして戻る</a>]
+        <hr>
+        <form method="POST" action="/c/{{ cid }}/new">
+            <table border="0">
+                <tr><td>タイトル:</td><td><input type="text" name="t" required style="width: 300px;"></td></tr>
+                <tr><td valign="top">最初の本文:</td><td><textarea name="b" required style="width: 300px; height: 100px;"></textarea></td></tr>
+                <tr><td></td><td><button type="submit">新規スレッド作成</button></td></tr>
+            </table>
+        </form>
+    {% elif v == 'thread' %}
+        <div class="thread-title">{{ tname }}</div>
+        [<a href="/c/{{ cid }}">スレッド一覧に戻る</a>] | [<a href="/c/{{ cid }}/t/{{ tid }}/post_form">このスレッドに書き込む</a>]
+        <p style="font-size: 0.9em; color: #555;">本日の画像残りアップロード回数: {{ 5 - count }} / 5 回</p>
+        <hr>
+        <div>
+            {% for p in items %}
+                <div class="post-box">
+                    <span class="post-meta">{{ loop.index }} : 名前: {{ p.n }} : {{ p.d }} ID: {{ p.id }}</span>
+                    <form method="POST" action="/del_p/{{ cid }}/{{ tid }}/{{ p.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
+                    <div class="post-body">{{ p.b }}</div>
+                </div>
+            {% endfor %}
+        </div>
+    {% elif v == 'post_form' %}
+        <div class="thread-title">{{ tname }} への書き込み</div>
+        [<a href="/c/{{ cid }}/t/{{ tid }}">キャンセルして戻る</a>]
+        <hr>
+        <form method="POST" action="/c/{{ cid }}/t/{{ tid }}/p" enctype="multipart/form-data">
+            <table border="0">
+                <tr><td>名前:</td><td><input type="text" name="name" value="名無しさん" style="width: 250px;"></td></tr>
+                <tr><td valign="top">本文:</td><td><textarea name="b" required style="width: 250px; height: 80px;"></textarea></td></tr>
+                <tr><td>画像:</td><td><input type="file" name="image" accept="image/*" {% if count >= 5 %}disabled{% endif %}></td></tr>
+                <tr><td></td><td><button type="submit">書き込む</button></td></tr>
+            </table>
+        </form>
+    {% endif %}
+    <script>
+        document.querySelectorAll('.post-body').forEach(function(el) {
+            var exp = /(https?:\/\/[^\s]+)/g;
+            el.innerHTML = el.innerHTML.replace(exp, '<a href="$1" target="_blank" rel="noopener noreferrer">$1</a>');
+        });
+    </script>
+</body>
+</html>
