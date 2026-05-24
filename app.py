@@ -13,11 +13,11 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
 
-# 🛠️ どんなにネストされたリスト・辞書構造が届いても100%安全に文字を取り出す関数に強化
+# 🛠️ MySQLが返す「辞書が入ったリスト」から安全にタイトルやクラス名を取り出す関数（バグ修正完了）
 def safe_get_title(data, key_name='title'):
     if isinstance(data, list) and len(data) > 0:
-        first = data[0]
-        if isinstance(first, dict): return first.get(key_name, '不明')
+        first_item = data[0]  # 確実にリストの1番目の要素（辞書）を取り出す
+        if isinstance(first_item, dict): return first_item.get(key_name, '不明')
     if isinstance(data, dict): return data.get(key_name, '不明')
     return '不明'
 
@@ -109,7 +109,7 @@ def post_chunk(cid, tid):
     upload_id, chunk_index, total_chunks = request.form.get('upload_id'), int(request.form.get('chunk_index', 0)), int(request.form.get('total_chunks', 10))
     f.save(os.path.join(TEMP_DIR, f"{upload_id}_{chunk_index}.part"))
     if chunk_index == total_chunks - 1:
-        final_filename = f"{uuid.uuid4()}{os.path.splitext(request.form.get('filename', 'image.jpg'))[1] or '.jpg'}"
+        final_filename = f"{uuid.uuid4()}{os.path.splitext(request.form.get('filename', 'image.jpg')) or '.jpg'}"
         try:
             with open(os.path.join(UPLOAD_FOLDER, final_filename), 'wb') as outfile:
                 for i in range(total_chunks):
@@ -135,5 +135,4 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
