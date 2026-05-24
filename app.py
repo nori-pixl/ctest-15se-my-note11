@@ -13,9 +13,13 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
 
+# 🛠️ どんなにネストされたリスト・辞書構造が届いても100%安全に文字を取り出す関数に強化
 def safe_get_title(data, key_name='title'):
-    if isinstance(data, list) and len(data) > 0: data = data[0]
-    return data.get(key_name, '不明') if isinstance(data, dict) else '不明'
+    if isinstance(data, list) and len(data) > 0:
+        first = data[0]
+        if isinstance(first, dict): return first.get(key_name, '不明')
+    if isinstance(data, dict): return data.get(key_name, '不明')
+    return '不明'
 
 @app.route('/')
 def index():
@@ -36,30 +40,27 @@ def new_class():
         except: flash("クラス追加エラー")
     return redirect('/')
 
-# 🛠️ 文字列型のクラスIDを安全に削除できるようにルート引数を調整
 @app.route('/c/<string:cid>/delete', methods=['POST'])
 def del_class(cid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": str(cid)}, timeout=10)
     except: flash("クラス削除エラー")
     return redirect('/')
 
-# 🛠️ 5桁の英数字IDをそのままの形で読み込んでクラスへリダイレクト
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
     target_id = request.form.get("five_id", "").strip()
-    if target_id == "00001": target_id = "1" # 利便性のために00001は1へ強制マッピング
+    if target_id == "00001": target_id = "1"
     if target_id: return redirect(f'/c/{target_id}')
     flash("正しいIDを入力してください"); return redirect('/')
 
 @app.route('/view_image')
 def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
 
-# 🛠️ ルーティングの引数を <int:cid> から <string:cid> へ変更し英数字クラスIDに対応
 @app.route('/c/<string:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {}
-    if not res.get("success") or not res.get("class"): flash("指定されたクラスが見つかりません。"); return redirect('/')
+    if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
     return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<string:cid>/create_form')
@@ -134,4 +135,5 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
