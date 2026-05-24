@@ -13,10 +13,10 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
 
-# 🛠️ 【ここを完全修正】data[0] と正確に指定し、MySQLのリスト構造から100%確実に辞書を引っこ抜く
+# 🛠️ 【バグ修正完了】リストの先頭から「[0]」で確実に要素を取り出し、型クラッシュを100%防ぎます
 def safe_get_title(data, key_name='title'):
     if isinstance(data, list) and len(data) > 0:
-        first_item = data[0]  # 🌟リストの1番目の要素（辞書）を正確に抽出
+        first_item = data[0]  # 🌟 [0] を確実に指定して最初の辞書データを抽出
         if isinstance(first_item, dict): return first_item.get(key_name, '不明')
     if isinstance(data, dict): return data.get(key_name, '不明')
     return '不明'
