@@ -36,36 +36,41 @@ def new_class():
         except: flash("クラス追加エラー")
     return redirect('/')
 
-@app.route('/c/<int:cid>/delete', methods=['POST'])
+# 🛠️ 文字列型のクラスIDを安全に削除できるようにルート引数を調整
+@app.route('/c/<string:cid>/delete', methods=['POST'])
 def del_class(cid):
-    try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": cid}, timeout=10)
+    try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": str(cid)}, timeout=10)
     except: flash("クラス削除エラー")
     return redirect('/')
 
+# 🛠️ 5桁の英数字IDをそのままの形で読み込んでクラスへリダイレクト
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
-    try: return redirect(f'/c/{int(request.form.get("five_id", ""))}')
-    except: flash("正しいIDを入力してください"); return redirect('/')
+    target_id = request.form.get("five_id", "").strip()
+    if target_id == "00001": target_id = "1" # 利便性のために00001は1へ強制マッピング
+    if target_id: return redirect(f'/c/{target_id}')
+    flash("正しいIDを入力してください"); return redirect('/')
 
 @app.route('/view_image')
 def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
 
-@app.route('/c/<int:cid>')
+# 🛠️ ルーティングの引数を <int:cid> から <string:cid> へ変更し英数字クラスIDに対応
+@app.route('/c/<string:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {}
-    if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
+    if not res.get("success") or not res.get("class"): flash("指定されたクラスが見つかりません。"); return redirect('/')
     return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
-@app.route('/c/<int:cid>/create_form')
+@app.route('/c/<string:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
 
-@app.route('/c/<int:cid>/new', methods=['POST'])
+@app.route('/c/<string:cid>/new', methods=['POST'])
 def new_t(cid):
     t, b = request.form.get('t'), request.form.get('b')
     if t and b:
         try:
-            res = requests.post(f"{TERMUX_API_BASE}/api/threads", json={"class_id": cid, "title": t, "body": b, "n": get_login_user(), "d": datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10).json()
+            res = requests.post(f"{TERMUX_API_BASE}/api/threads", json={"class_id": str(cid), "title": t, "body": b, "n": get_login_user(), "d": datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10).json()
             tid = res.get("tid")
             if tid:
                 vlist = request.cookies.get('vlist', '').split(',')
@@ -76,25 +81,25 @@ def new_t(cid):
         except: flash("スレッド作成エラー")
     return redirect(url_for('v_class', cid=cid))
 
-@app.route('/c/<int:cid>/t/<int:tid>')
+@app.route('/c/<string:cid>/t/<int:tid>')
 def v_thread(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
     return render_template('board.html', v='thread', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
 
-@app.route('/c/<int:cid>/t/<int:tid>/post_form')
+@app.route('/c/<string:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
     return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), login_user=get_login_user(), count=get_image_upload_count())
 
-@app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
+@app.route('/c/<string:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': request.form.get('name', get_login_user()), 'message': request.form.get('b', ''), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10)
     except: flash("投稿エラー")
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
-@app.route('/c/<int:cid>/t/<int:tid>/p_chunk', methods=['POST'])
+@app.route('/c/<string:cid>/t/<int:tid>/p_chunk', methods=['POST'])
 def post_chunk(cid, tid):
     cnt = get_image_upload_count()
     if cnt >= 5: return "本日の画像アップロード上限（5回）に達しました。", 400
@@ -116,13 +121,13 @@ def post_chunk(cid, tid):
     if chunk_index == 9: resp.set_cookie('img_upload_count', str(cnt + 1), max_age=60*60*24)
     return resp
 
-@app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
+@app.route('/del_t/<string:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_thread", json={"tid": tid}, timeout=10)
     except: flash("削除通信エラー")
     return redirect(url_for('v_class', cid=cid))
 
-@app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
+@app.route('/del_p/<string:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_post", json={"pid": pid}, timeout=10)
     except: flash("削除通信エラー")
