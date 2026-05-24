@@ -13,6 +13,14 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
 
+# 🛠️ 【バグ完全修正】「data[0]」と正確に指定し、MySQLのリスト構造から100%確実に辞書を引っこ抜く構造に修正
+def safe_get_title(data, key_name='title'):
+    if isinstance(data, list) and len(data) > 0:
+        first_item = data[0]  # 🌟 リストの最初の要素（辞書）を正確に抽出
+        if isinstance(first_item, dict): return first_item.get(key_name, '不明')
+    if isinstance(data, dict): return data.get(key_name, '不明')
+    return '不明'
+
 @app.route('/')
 def index():
     try: res = requests.get(f"{TERMUX_API_BASE}/api/classes", timeout=10).json()
@@ -32,14 +40,12 @@ def new_class():
         except: flash("クラス追加エラー")
     return redirect('/')
 
-# 🛠️ 文字列型のクラスIDに対応
 @app.route('/c/<string:cid>/delete', methods=['POST'])
 def del_class(cid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": str(cid)}, timeout=10)
     except: flash("クラス削除エラー")
     return redirect('/')
 
-# 🛠️ 5桁の英数字IDをそのままの形で読み込んでクラスへリダイレクト
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
     target_id = request.form.get("five_id", "").strip()
@@ -50,16 +56,12 @@ def jump_by_id():
 @app.route('/view_image')
 def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
 
-# 🛠️ ルーティングの引数を <string:cid> へ変更し英数字クラスIDに対応
 @app.route('/c/<string:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {}
     if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
-    
-    c_info = res.get("class", {})
-    cname = c_info.get("name", "名称不明")
-    return render_template('board.html', v='class', cid=cid, cname=cname, items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
+    return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<string:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
@@ -84,15 +86,13 @@ def new_t(cid):
 def v_thread(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    th_info = res.get("thread", {})
-    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=th_info.get('title', '不明'), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
+    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
 
 @app.route('/c/<string:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    th_info = res.get("thread", {})
-    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=th_info.get('title', '不明'), login_user=get_login_user(), count=get_image_upload_count())
+    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), login_user=get_login_user(), count=get_image_upload_count())
 
 @app.route('/c/<string:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
@@ -109,7 +109,7 @@ def post_chunk(cid, tid):
     upload_id, chunk_index, total_chunks = request.form.get('upload_id'), int(request.form.get('chunk_index', 0)), int(request.form.get('total_chunks', 10))
     f.save(os.path.join(TEMP_DIR, f"{upload_id}_{chunk_index}.part"))
     if chunk_index == total_chunks - 1:
-        final_filename = f"{uuid.uuid4()}{os.path.splitext(request.form.get('filename', 'image.jpg')) or '.jpg'}"
+        final_filename = f"{uuid.uuid4()}{os.path.splitext(request.form.get('filename', 'image.jpg'))[1] or '.jpg'}"
         try:
             with open(os.path.join(UPLOAD_FOLDER, final_filename), 'wb') as outfile:
                 for i in range(total_chunks):
