@@ -50,7 +50,7 @@ def v_thread(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
     
-    # 🛠️ リスト型・辞書型の両方に完全対応した安全なタイトル抽出ロジック
+    # 🛠️ タブレットから届くデータ（辞書が入ったリスト）を安全にフラット化する処理
     th = res.get("thread", [])
     tname = "不明"
     if isinstance(th, list) and len(th) > 0:
@@ -66,7 +66,6 @@ def post_form(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
     
-    # 🛠️ 投稿フォーム側も同様の安全ロジックに修正
     th = res.get("thread", [])
     tname = "不明"
     if isinstance(th, list) and len(th) > 0:
