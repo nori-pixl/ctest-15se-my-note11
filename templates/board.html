@@ -63,10 +63,11 @@
                     <span class="post-meta">{{ loop.index }} : 名前: {{ p.n }} : {{ p.d }} ID: {{ p.id }}</span>
                     <form method="POST" action="/del_p/{{ cid }}/{{ tid }}/{{ p.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
                     <div class="post-body">{{ p.b }}</div>
-                    <!-- 🛠️ トンネルURLとファイル名を直接組み合わせて、実ファイルへのアクセスリンクを生成 -->
+                    
+                    <!-- 🛠️ タップした際に新画面「img.html」を別タブで立ち上げる形式に書き換え -->
                     {% if p.img %}
                         <div style="margin-left: 20px; margin-top: 5px; font-size: 0.9em;">
-                            添付画像: <a href="https://trycloudflare.com{{ p.img }}" target="_blank" rel="noopener noreferrer">https://trycloudflare.com{{ p.img }}</a>
+                            添付画像: <a href="/view_image?f={{ p.img.split('/')[-1] }}" target="_blank" rel="noopener noreferrer">[画像を開く]</a>
                         </div>
                     {% endif %}
                 </div>
@@ -128,7 +129,6 @@
             const totalChunks = 10;
             const chunkSize = Math.ceil(file.size / totalChunks);
             const uploadId = crypto.randomUUID();
-
             pBar.style.display = 'block';
 
             for (let i = 0; i < totalChunks; i++) {
@@ -146,7 +146,7 @@
 
                 if (i === totalChunks - 1) {
                     formData.append('name', name);
-                    formData.append('b', body);
+                    formData.append('message', body);
                 }
 
                 const res = await fetch('/c/{{ cid }}/t/{{ tid }}/p_chunk', {
@@ -166,7 +166,6 @@
                 pFill.style.width = progress + '%';
                 pFill.innerText = progress + '%';
             }
-
             window.location.href = '/c/{{ cid }}/t/{{ tid }}';
         }
     </script>
