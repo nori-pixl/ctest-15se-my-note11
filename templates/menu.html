@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>掲示板メニュー</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #fffff0; color: #000000; padding: 20px; }
+        a { color: #0000ff; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        .box { background: #fafafa; border: 1px solid #ccc; padding: 10px; margin-bottom: 10px; }
+        .menu-title { font-size: 1.4em; font-weight: bold; color: #ff0000; text-align: center; margin-bottom: 20px; }
+        .section-title { font-size: 1.1em; font-weight: bold; color: #ff0000; margin-top: 25px; margin-bottom: 10px; }
+        .error-msg { color: #ff0000; font-weight: bold; margin-bottom: 10px; }
+        .class-id-text { font-size: 0.85em; color: #666; margin-left: 10px; }
+    </style>
+</head>
+<body>
+    <div class="menu-title">掲示板メニュー ポータル</div>
+    <hr>
+    
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}
+        {% for message in messages %}
+          <div class="error-msg">[注意] {{ message }}</div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+
+    <!-- 🌟 真ん中：クラス（板）の一覧表示エリア -->
+    <div class="section-title">クラス一覧</div>
+    <div>
+        {% if not items %}
+            <p>作成されたクラスがまだありません。</p>
+        {% endif %}
+        {% for c in items %}
+            <div class="box">
+                <!-- IDを5桁のゼロ埋め形式にして見やすく表示 -->
+                <a href="/c/{{ c.id }}" style="font-weight: bold; font-size: 1.1em;">{{ loop.index }}: {{ c.name }}</a>
+                <span class="class-id-text">(クラスID: {{ '%05d' % c.id }})</span>
+                
+                <!-- 一般クラス(ID=1)だけは削除できない安全ガード -->
+                {% if c.id != 1 %}
+                    <form method="POST" action="/c/{{ c.id }}/delete" style="display:inline; margin-left:15px;" onsubmit="return confirm('この板の中のスレッドと書き込みもすべて消去されます。本当によろしいですか？')">
+                        <button type="submit" style="font-size:0.8em; color: red;">このクラスを削除</button>
+                    </form>
+                {% endif %}
+            </div>
+        {% endfor %}
+    </div>
+    <hr>
+        <!-- 🌟 下部：クラスの追加 ＆ 5桁IDでのクラス呼び出しエリア -->
+    <table border="0" style="margin-top: 20px; background: #fafafa; border: 1px solid #ccc; padding: 15px; width: 100%;">
+        <tr>
+            <td valign="top" style="width: 50%; border-right: 1px dashed #ccc; padding-right: 15px;">
+                <div class="section-title" style="margin-top: 0;">🛠️ 新しいクラスを増やす</div>
+                <form method="POST" action="/c/new_class">
+                    <table border="0">
+                        <tr>
+                            <td>クラスの名前:</td>
+                            <td><input type="text" name="cname" required style="width: 180px;" placeholder="例: 趣味、画像など"></td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td style="padding-top: 10px;"><button type="submit">新しいクラスを作成</button></td>
+                        </tr>
+                    </table>
+                </form>
+            </td>
+            <td valign="top" style="padding-left: 15px;">
+                <div class="section-title" style="margin-top: 0;">5桁のIDで直接クラスを呼び出す</div>
+                <p style="font-size: 0.85em; color: #555; margin-top: 0;">メニューにないクラスでもID番号から直接開けます。</p>
+                <form method="POST" action="/c/jump_by_id">
+                    <table border="0">
+                        <tr>
+                            <td>5桁のクラスID:</td>
+                            <td><input type="text" name="five_id" required pattern="[0-9]{1,5}" maxlength="5" style="width: 120px;" placeholder="例: 00002"></td>
+                        </tr>
+                        <tr>
+                            <td></td>
+                            <td style="padding-top: 10px;"><button type="submit">指定したクラスへ移動</button></td>
+                        </tr>
+                    </table>
+                </form>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
