@@ -3,6 +3,7 @@ from flask import Flask, request, redirect, render_template, make_response, url_
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "temporary_secret_key_string")
+# ⚠️ ご自身の Cloudflare Tunnel URL であることをご確認ください
 TERMUX_API_BASE = os.environ.get("TERMUX_API_URL", "https://trycloudflare.com")
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
@@ -12,28 +13,6 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
-
-# 🛠️ 【無敵化】どんなにねじ曲がったリスト・辞書のネスト構造が届いても絶対に100%安全に文字列を取り出す最強関数
-def safe_get_title(data, key_name='title'):
-    try:
-        if not data: return '不明'
-        # もしデータ全体がリストなら、その最初の要素を剥ぎ取る
-        if isinstance(data, list):
-            if len(data) == 0: return '不明'
-            data = data[0]
-        # もしデータが辞書（dict）なら中身をチェック
-        if isinstance(data, dict):
-            val = data.get(key_name)
-            # 辞書のバリューがさらにリストになっていた場合、その最初の要素を剥ぎ取る
-            if isinstance(val, list):
-                if len(val) == 0: return '不明'
-                val = val[0]
-            if isinstance(val, dict):
-                val = val.get(key_name)
-            return str(val) if val is not None else '不明'
-        return str(data)
-    except:
-        return '不明'
 
 @app.route('/')
 def index():
@@ -54,40 +33,40 @@ def new_class():
         except: flash("クラス追加エラー")
     return redirect('/')
 
-@app.route('/c/<string:cid>/delete', methods=['POST'])
+@app.route('/c/<int:cid>/delete', methods=['POST'])
 def del_class(cid):
-    try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": str(cid)}, timeout=10)
+    try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": int(cid)}, timeout=10)
     except: flash("クラス削除エラー")
     return redirect('/')
 
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
-    target_id = request.form.get("five_id", "").strip()
-    if target_id == "00001": target_id = "1"
-    if target_id: return redirect(f'/c/{target_id}')
-    flash("正しいIDを入力してください"); return redirect('/')
+    try: return redirect(f'/c/{int(request.form.get("five_id", ""))}')
+    except: flash("正しいIDを入力してください"); return redirect('/')
 
 @app.route('/view_image')
 def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
 
-@app.route('/c/<string:cid>')
+@app.route('/c/<int:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {}
     if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
-    # 🌟 safe_get_titleでクラスデータを安全に平坦化
-    cname_val = safe_get_title(res.get("class", {}), 'name')
-    return render_template('board.html', v='class', cid=cid, cname=cname_val, items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
+    
+    # 🌟 バックエンド側からきれいな単体辞書型で届くため、直接展開して500エラーを完全に回避
+    c_info = res.get("class", {})
+    cname = c_info.get("name", "名称不明")
+    return render_template('board.html', v='class', cid=cid, cname=cname, items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
-@app.route('/c/<string:cid>/create_form')
+@app.route('/c/<int:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
 
-@app.route('/c/<string:cid>/new', methods=['POST'])
+@app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
     t, b = request.form.get('t'), request.form.get('b')
     if t and b:
         try:
-            res = requests.post(f"{TERMUX_API_BASE}/api/threads", json={"class_id": str(cid), "title": t, "body": b, "n": get_login_user(), "d": datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10).json()
+            res = requests.post(f"{TERMUX_API_BASE}/api/threads", json={"class_id": int(cid), "title": t, "body": b, "n": get_login_user(), "d": datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10).json()
             tid = res.get("tid")
             if tid:
                 vlist = request.cookies.get('vlist', '').split(',')
@@ -98,25 +77,27 @@ def new_t(cid):
         except: flash("スレッド作成エラー")
     return redirect(url_for('v_class', cid=cid))
 
-@app.route('/c/<string:cid>/t/<int:tid>')
+@app.route('/c/<int:cid>/t/<int:tid>')
 def v_thread(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
+    th_info = res.get("thread", {})
+    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=th_info.get('title', '不明'), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
 
-@app.route('/c/<string:cid>/t/<int:tid>/post_form')
+@app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), login_user=get_login_user(), count=get_image_upload_count())
+    th_info = res.get("thread", {})
+    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=th_info.get('title', '不明'), login_user=get_login_user(), count=get_image_upload_count())
 
-@app.route('/c/<string:cid>/t/<int:tid>/p', methods=['POST'])
+@app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': request.form.get('name', get_login_user()), 'message': request.form.get('b', ''), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10)
     except: flash("投稿エラー")
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
-@app.route('/c/<string:cid>/t/<int:tid>/p_chunk', methods=['POST'])
+@app.route('/c/<int:cid>/t/<int:tid>/p_chunk', methods=['POST'])
 def post_chunk(cid, tid):
     cnt = get_image_upload_count()
     if cnt >= 5: return "本日の画像アップロード上限（5回）に達しました。", 400
@@ -138,18 +119,17 @@ def post_chunk(cid, tid):
     if chunk_index == 9: resp.set_cookie('img_upload_count', str(cnt + 1), max_age=60*60*24)
     return resp
 
-@app.route('/del_t/<string:cid>/<int:tid>', methods=['POST'])
+@app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_thread", json={"tid": tid}, timeout=10)
     except: flash("削除通信エラー")
     return redirect(url_for('v_class', cid=cid))
 
-@app.route('/del_p/<string:cid>/<int:tid>/<int:pid>', methods=['POST'])
+@app.route('/del_p/<int:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_post", json={"pid": pid}, timeout=10)
     except: flash("削除通信エラー")
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
