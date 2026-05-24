@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>画像ビューアー</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { font-family: sans-serif; background: #222222; color: #ffffff; padding: 20px; text-align: center; }
+        a { color: #87ceeb; text-decoration: none; font-size: 1.1em; }
+        a:hover { text-decoration: underline; }
+        .img-box { margin-top: 20px; max-width: 100%; display: flex; justify-content: center; align-items: center; }
+        .img-box img { max-width: 100%; max-height: 80vh; border: 1px solid #444; border-radius: 4px; object-fit: contain; }
+        .info { margin-top: 15px; color: #aaa; font-size: 0.9em; }
+    </style>
+</head>
+<body>
+    <div>[<a href="javascript:window.close();">このタブを閉じる</a>]</div>
+    <hr style="border: 0; border-top: 1px solid #444; margin: 20px 0;">
+    
+    <div class="img-box">
+        <img src="{{ img_path }}" alt="添付画像">
+    </div>
+    
+    <div class="info">画像URL: {{ img_path }}</div>
+</body>
+</html>
