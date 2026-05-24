@@ -1,13 +1,15 @@
 import os, datetime, requests, uuid
-from flask import Flask, request, redirect, render_template, make_response, url_for, flash, jsonify, send_from_directory
+from flask import Flask, request, redirect, render_template, make_response, url_for, flash, jsonify
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "temporary_secret_key_string")
 TERMUX_API_BASE = os.environ.get("TERMUX_API_URL", "https://trycloudflare.com")
 
+# 🛠️ Render内部に画像を物理保存するためのフォルダ（static）を自動作成
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 if not os.path.exists(UPLOAD_FOLDER): os.makedirs(UPLOAD_FOLDER)
 
+# 10等分のパーツを一時的に溜めておくためのゴミ箱フォルダ
 TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "chunks_tmp")
 if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 
@@ -34,7 +36,6 @@ def v_class(cid):
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user="名無しさん")
 
-# 🛠️ 【追加機能】送られてきたファイル名をimg.htmlテンプレートへ安全に流し込んで表示する画面
 @app.route('/view_image')
 def view_image():
     fname = request.args.get('f', '')
@@ -89,6 +90,7 @@ def post(cid, tid):
     except: flash("投稿エラー")
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
+# 🛠️ 10分割されたパーツを、Render自身の中でファイルに組み立てる処理（データベースサーバーへ重いデータを送らない）
 @app.route('/c/<int:cid>/t/<int:tid>/p_chunk', methods=['POST'])
 def post_chunk(cid, tid):
     if cid != 1: return "Invalid class", 400
@@ -96,14 +98,47 @@ def post_chunk(cid, tid):
     if cnt >= 5: return "本日の画像アップロード上限（5回）に達しました。", 400
     f = request.files.get('image_chunk')
     if not f: return "No chunk file", 400
-    dt = {'upload_id': request.form.get('upload_id'), 'chunk_index': request.form.get('chunk_index'), 'total_chunks': request.form.get('total_chunks'), 'filename': request.form.get('filename'), 'content_type': request.form.get('content_type'), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M'), 'name': request.form.get('name', '名無しさん'), 'message': request.form.get('message', '')}
-    try:
-        ctype = f.content_type if hasattr(f, 'content_type') else 'image/jpeg'
-        api_res = requests.post(f"{TERMUX_API_BASE}/api/posts_chunk", data=dt, files={'image_chunk': (f.filename, f.stream, ctype)}, timeout=30).json()
-    except Exception as e: return f"データベースサーバーへの通信エラー: {str(e)}", 502
-    if not api_res.get("success"): return "データベースサーバー側での保存に失敗しました。", 500
+
+    upload_id = request.form.get('upload_id')
+    chunk_index = int(request.form.get('chunk_index', 0))
+    total_chunks = int(request.form.get('total_chunks', 10))
+
+    chunk_path = os.path.join(TEMP_DIR, f"{upload_id}_{chunk_index}.part")
+    f.save(chunk_path)
+
+    if chunk_index == total_chunks - 1:
+        # タプル型（.jpg）文字バグを防ぐため、文字列処理を修正
+        orig_filename = request.form.get('filename', 'image.jpg')
+        ext = os.path.splitext(orig_filename)[1]
+        if not ext: ext = '.jpg'
+        
+        final_filename = f"{uuid.uuid4()}{ext}"
+        final_path = os.path.join(UPLOAD_FOLDER, final_filename)
+
+        try:
+            with open(final_path, 'wb') as outfile:
+                for i in range(total_chunks):
+                    part_path = os.path.join(TEMP_DIR, f"{upload_id}_{i}.part")
+                    with open(part_path, 'rb') as infile: outfile.write(infile.read())
+                    os.remove(part_path)
+            img_url_to_save = f"/static/{final_filename}"
+        except Exception as e:
+            return f"Render側でのファイル結合に失敗しました: {str(e)}", 500
+
+        # 結合完了後、軽いテキスト（画像URLの文字のみ）をデータベースサーバーへPOST送信して保存をお願いする
+        try:
+            requests.post(f"{TERMUX_API_BASE}/api/posts", json={
+                'name': request.form.get('name', '名無しさん'),
+                'message': request.form.get('message', ''),
+                'thread_id': tid,
+                'd': datetime.datetime.now().strftime('%m/%d %H:%M'),
+                'img': img_url_to_save
+            }, timeout=10)
+        except Exception as e:
+            return f"データベースサーバーへの通信エラー: {str(e)}", 502
+
     resp = make_response(jsonify({"success": True}))
-    if str(request.form.get('chunk_index')) == "9" and api_res.get("complete"):
+    if chunk_index == 9:
         resp.set_cookie('img_upload_count', str(cnt + 1), max_age=60*60*24)
     return resp
 
