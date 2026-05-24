@@ -36,7 +36,7 @@
                 <div class="box">
                     <a href="/c/{{ cid }}/t/{{ t.id }}">{{ loop.index }}: {{ t.title }}</a>
                     {% if t.id|string in vlist %}
-                        <form method="POST" action="/remove_from_list/{{ t.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">お気に入り解除</button></form>
+                    
                     {% endif %}
                     <form method="POST" action="/del_t/{{ cid }}/{{ t.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
                 </div>
