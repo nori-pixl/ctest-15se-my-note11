@@ -13,13 +13,27 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
 
-# 🛠️ 【バグ修正完了】リストの先頭から「[0]」で確実に要素を取り出し、型クラッシュを100%防ぎます
+# 🛠️ 【無敵化】どんなにねじ曲がったリスト・辞書のネスト構造が届いても絶対に100%安全に文字列を取り出す最強関数
 def safe_get_title(data, key_name='title'):
-    if isinstance(data, list) and len(data) > 0:
-        first_item = data[0]  # 🌟 [0] を確実に指定して最初の辞書データを抽出
-        if isinstance(first_item, dict): return first_item.get(key_name, '不明')
-    if isinstance(data, dict): return data.get(key_name, '不明')
-    return '不明'
+    try:
+        if not data: return '不明'
+        # もしデータ全体がリストなら、その最初の要素を剥ぎ取る
+        if isinstance(data, list):
+            if len(data) == 0: return '不明'
+            data = data[0]
+        # もしデータが辞書（dict）なら中身をチェック
+        if isinstance(data, dict):
+            val = data.get(key_name)
+            # 辞書のバリューがさらにリストになっていた場合、その最初の要素を剥ぎ取る
+            if isinstance(val, list):
+                if len(val) == 0: return '不明'
+                val = val[0]
+            if isinstance(val, dict):
+                val = val.get(key_name)
+            return str(val) if val is not None else '不明'
+        return str(data)
+    except:
+        return '不明'
 
 @app.route('/')
 def index():
@@ -61,7 +75,9 @@ def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {}
     if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
-    return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
+    # 🌟 safe_get_titleでクラスデータを安全に平坦化
+    cname_val = safe_get_title(res.get("class", {}), 'name')
+    return render_template('board.html', v='class', cid=cid, cname=cname_val, items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<string:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
