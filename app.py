@@ -7,14 +7,15 @@ TERMUX_API_BASE = os.environ.get("TERMUX_API_URL", "https://trycloudflare.com")
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 if not os.path.exists(UPLOAD_FOLDER): os.makedirs(UPLOAD_FOLDER)
-
-TEMP_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static", "chunks_tmp")
+TEMP_DIR = os.path.join(UPLOAD_FOLDER, "chunks_tmp")
 if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
-
-# 🛠️ クッキーから保存された名前を読み出すヘルパー関数（なければデフォルトは「名無しさん」）
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
+
+def safe_get_title(data, key_name='title'):
+    if isinstance(data, list) and len(data) > 0: data = data[0]
+    return data.get(key_name, '不明') if isinstance(data, dict) else '不明'
 
 @app.route('/')
 def index():
@@ -22,19 +23,16 @@ def index():
     except: res = {}
     return render_template('menu.html', items=res.get("classes", []), login_user=get_login_user())
 
-# 🛠️ 【追加機能】入力された新しい名前をCookieに30日間保存するルート
 @app.route('/change_name', methods=['POST'])
 def change_name():
-    new_name = request.form.get('username', '名無しさん')
     resp = make_response(redirect('/'))
-    resp.set_cookie('login_user', new_name, max_age=60*60*24*30)
+    resp.set_cookie('login_user', request.form.get('username', '名無しさん'), max_age=60*60*24*30)
     return resp
 
 @app.route('/c/new_class', methods=['POST'])
 def new_class():
-    name = request.form.get('cname')
-    if name:
-        try: requests.post(f"{TERMUX_API_BASE}/api/classes", json={"name": name}, timeout=10)
+    if request.form.get('cname'):
+        try: requests.post(f"{TERMUX_API_BASE}/api/classes", json={"name": request.form.get('cname')}, timeout=10)
         except: flash("クラス追加エラー")
     return redirect('/')
 
@@ -46,28 +44,18 @@ def del_class(cid):
 
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
-    raw_id = request.form.get('five_id', '')
-    try:
-        cid = int(raw_id)
-        return redirect(f'/c/{cid}')
-    except:
-        flash("正しいIDを入力してください")
-        return redirect('/')
+    try: return redirect(f'/c/{int(request.form.get("five_id", ""))}')
+    except: flash("正しいIDを入力してください"); return redirect('/')
 
 @app.route('/view_image')
-def view_image():
-    fname = request.args.get('f', '')
-    return render_template('img.html', img_path=f"/static/{fname}")
+def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
+
 @app.route('/c/<int:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {}
-    if not res.get("success"):
-        flash("指定されたクラス（板）が見つかりません。")
-        return redirect('/')
-    c_info = res.get("class", {})
-    cname = c_info.get("name", "名称不明") if isinstance(c_info, list) and len(c_info) > 0 else c_info.get("name", "名称不明")
-    return render_template('board.html', v='class', cid=cid, cname=cname, items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
+    if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
+    return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
@@ -92,25 +80,13 @@ def new_t(cid):
 def v_thread(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    th = res.get("thread", [])
-    tname = "不明"
-    if isinstance(th, list) and len(th) > 0:
-        first_item = th
-        if isinstance(first_item, dict): tname = first_item.get('title', '不明')
-    elif isinstance(th, dict): tname = th.get('title', '不明')
-    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=tname, items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
+    return render_template('board.html', v='thread', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    th = res.get("thread", [])
-    tname = "不明"
-    if isinstance(th, list) and len(th) > 0:
-        first_item = th
-        if isinstance(first_item, dict): tname = first_item.get('title', '不明')
-    elif isinstance(th, dict): tname = th.get('title', '不明')
-    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=tname, login_user=get_login_user(), count=get_image_upload_count())
+    return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), login_user=get_login_user(), count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
@@ -124,15 +100,20 @@ def post_chunk(cid, tid):
     if cnt >= 5: return "本日の画像アップロード上限（5回）に達しました。", 400
     f = request.files.get('image_chunk')
     if not f: return "No chunk file", 400
-    dt = {'upload_id': request.form.get('upload_id'), 'chunk_index': request.form.get('chunk_index'), 'total_chunks': request.form.get('total_chunks'), 'filename': request.form.get('filename'), 'content_type': request.form.get('content_type'), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M'), 'name': request.form.get('name', get_login_user()), 'message': request.form.get('message', '')}
-    try:
-        ctype = f.content_type if hasattr(f, 'content_type') else 'image/jpeg'
-        api_res = requests.post(f"{TERMUX_API_BASE}/api/posts_chunk", data=dt, files={'image_chunk': (f.filename, f.stream, ctype)}, timeout=30).json()
-    except Exception as e: return f"データベースサーバーへの通信エラー: {str(e)}", 502
-    if not api_res.get("success"): return "データベースサーバー側での保存に失敗しました。", 500
+    upload_id, chunk_index, total_chunks = request.form.get('upload_id'), int(request.form.get('chunk_index', 0)), int(request.form.get('total_chunks', 10))
+    f.save(os.path.join(TEMP_DIR, f"{upload_id}_{chunk_index}.part"))
+    if chunk_index == total_chunks - 1:
+        final_filename = f"{uuid.uuid4()}{os.path.splitext(request.form.get('filename', 'image.jpg'))[1] or '.jpg'}"
+        try:
+            with open(os.path.join(UPLOAD_FOLDER, final_filename), 'wb') as outfile:
+                for i in range(total_chunks):
+                    part_path = os.path.join(TEMP_DIR, f"{upload_id}_{i}.part")
+                    with open(part_path, 'rb') as infile: outfile.write(infile.read())
+                    os.remove(part_path)
+            requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': request.form.get('name', get_login_user()), 'message': request.form.get('message', ''), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M'), 'img': f"/static/{final_filename}"}, timeout=10)
+        except: return "保存または通信に失敗しました。", 500
     resp = make_response(jsonify({"success": True}))
-    if str(request.form.get('chunk_index')) == "9" and api_res.get("complete"):
-        resp.set_cookie('img_upload_count', str(cnt + 1), max_age=60*60*24)
+    if chunk_index == 9: resp.set_cookie('img_upload_count', str(cnt + 1), max_age=60*60*24)
     return resp
 
 @app.route('/del_t/<int:cid>/<int:tid>', methods=['POST'])
@@ -148,5 +129,4 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 8000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
