@@ -49,10 +49,17 @@ def v_thread(cid, tid):
     if cid != 1: return redirect('/')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
+    
+    # 🛠️ MySQLのリスト形式型レスポンスからスレッドタイトルを安全に抽出する修正ロジック
     th = res.get("thread", [])
     tname = "不明"
-    if isinstance(th, list) and len(th) > 0: tname = th.get('title', '不明') if isinstance(th, dict) else "不明"
-    elif isinstance(th, dict): tname = th.get('title', '不明')
+    if isinstance(th, list) and len(th) > 0:
+        first_item = th[0]
+        if isinstance(first_item, dict):
+            tname = first_item.get('title', '不明')
+    elif isinstance(th, dict):
+        tname = th.get('title', '不明')
+            
     return render_template('board.html', v='thread', cid=cid, tid=tid, tname=tname, items=res.get("posts", []), login_user="名無しさん", count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
@@ -60,10 +67,17 @@ def post_form(cid, tid):
     if cid != 1: return redirect('/')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
+    
+    # 🛠️ 書き込みフォーム画面側も同様に安全ロジックに修正
     th = res.get("thread", [])
     tname = "不明"
-    if isinstance(th, list) and len(th) > 0: tname = th.get('title', '不明') if isinstance(th, dict) else "不明"
-    elif isinstance(th, dict): tname = th.get('title', '不明')
+    if isinstance(th, list) and len(th) > 0:
+        first_item = th[0]
+        if isinstance(first_item, dict):
+            tname = first_item.get('title', '不明')
+    elif isinstance(th, dict):
+        tname = th.get('title', '不明')
+            
     return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=tname, login_user="名無しさん", count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
@@ -83,7 +97,6 @@ def post_chunk(cid, tid):
     dt = {'upload_id': request.form.get('upload_id'), 'chunk_index': request.form.get('chunk_index'), 'total_chunks': request.form.get('total_chunks'), 'filename': request.form.get('filename'), 'content_type': request.form.get('content_type'), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M'), 'name': request.form.get('name', '名無しさん'), 'message': request.form.get('b', '')}
     
     try:
-        # 🛠️ クラッシュの原因だった f.f.content_type を正しい Flask のファイル属性（f.content_type）に修正
         ctype = f.content_type if hasattr(f, 'content_type') else 'image/jpeg'
         api_res = requests.post(f"{TERMUX_API_BASE}/api/posts_chunk", data=dt, files={'image_chunk': (f.filename, f.stream, ctype)}, timeout=30).json()
     except Exception as e: return f"データベースサーバーへの通信エラー: {str(e)}", 502
