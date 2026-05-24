@@ -63,7 +63,7 @@
                     <span class="post-meta">{{ loop.index }} : 名前: {{ p.n }} : {{ p.d }} ID: {{ p.id }}</span>
                     <form method="POST" action="/del_p/{{ cid }}/{{ tid }}/{{ p.id }}" style="display:inline; margin-left:10px;"><button type="submit" style="font-size:0.8em;">削除</button></form>
                     <div class="post-body">{{ p.b }}</div>
-                    <!-- 🛠️ トンネルURLの先頭を強制指定して、タブレット内の画像へ直行リンクを貼る -->
+                    <!-- 🛠️ トンネルURLとファイル名を直接組み合わせて、実ファイルへのアクセスリンクを生成 -->
                     {% if p.img %}
                         <div style="margin-left: 20px; margin-top: 5px; font-size: 0.9em;">
                             添付画像: <a href="https://trycloudflare.com{{ p.img }}" target="_blank" rel="noopener noreferrer">https://trycloudflare.com{{ p.img }}</a>
