@@ -51,7 +51,7 @@ def v_thread(cid, tid):
     except: res = {}
     th = res.get("thread", [])
     tname = "不明"
-    if isinstance(th, list) and len(th) > 0: tname = th[0].get('title', '不明') if isinstance(th[0], dict) else "不明"
+    if isinstance(th, list) and len(th) > 0: tname = th.get('title', '不明') if isinstance(th, dict) else "不明"
     elif isinstance(th, dict): tname = th.get('title', '不明')
     return render_template('board.html', v='thread', cid=cid, tid=tid, tname=tname, items=res.get("posts", []), login_user="名無しさん", count=get_image_upload_count())
 
@@ -62,7 +62,7 @@ def post_form(cid, tid):
     except: res = {}
     th = res.get("thread", [])
     tname = "不明"
-    if isinstance(th, list) and len(th) > 0: tname = th[0].get('title', '不明') if isinstance(th[0], dict) else "不明"
+    if isinstance(th, list) and len(th) > 0: tname = th.get('title', '不明') if isinstance(th, dict) else "不明"
     elif isinstance(th, dict): tname = th.get('title', '不明')
     return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=tname, login_user="名無しさん", count=get_image_upload_count())
 
@@ -81,9 +81,14 @@ def post_chunk(cid, tid):
     f = request.files.get('image_chunk')
     if not f: return "No chunk file", 400
     dt = {'upload_id': request.form.get('upload_id'), 'chunk_index': request.form.get('chunk_index'), 'total_chunks': request.form.get('total_chunks'), 'filename': request.form.get('filename'), 'content_type': request.form.get('content_type'), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M'), 'name': request.form.get('name', '名無しさん'), 'message': request.form.get('b', '')}
-    try: api_res = requests.post(f"{TERMUX_API_BASE}/api/posts_chunk", data=dt, files={'image_chunk': (f.filename, f.stream, f.f.content_type if hasattr(f, 'content_type') else f.mimetype)}, timeout=30).json()
-    except Exception as e: return f"タブレットへの通信エラー: {str(e)}", 502
-    if not api_res.get("success"): return "タブレット側での保存に失敗しました。", 500
+    
+    try:
+        # 🛠️ クラッシュの原因だった f.f.content_type を正しい Flask のファイル属性（f.content_type）に修正
+        ctype = f.content_type if hasattr(f, 'content_type') else 'image/jpeg'
+        api_res = requests.post(f"{TERMUX_API_BASE}/api/posts_chunk", data=dt, files={'image_chunk': (f.filename, f.stream, ctype)}, timeout=30).json()
+    except Exception as e: return f"データベースサーバーへの通信エラー: {str(e)}", 502
+    
+    if not api_res.get("success"): return "データベースサーバー側での保存に失敗しました。", 500
     resp = make_response(jsonify({"success": True}))
     if str(request.form.get('chunk_index')) == "9" and api_res.get("complete"):
         resp.set_cookie('img_upload_count', str(cnt + 1), max_age=60*60*24)
@@ -102,4 +107,5 @@ def del_p(cid, tid, pid):
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8000)))
+    port = int(os.environ.get('PORT', 8000))
+    app.run(host='0.0.0.0', port=port)
