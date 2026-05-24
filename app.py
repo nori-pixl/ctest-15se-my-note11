@@ -27,7 +27,6 @@ def v_class(cid):
 
 @app.route('/c/<int:cid>/create_form')
 def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user="名無しさん")
-
 @app.route('/c/<int:cid>/new', methods=['POST'])
 def new_t(cid):
     if cid != 1: return redirect('/')
@@ -50,16 +49,8 @@ def v_thread(cid, tid):
     if cid != 1: return redirect('/')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    
-    # 🛠️ どんな型（リスト・辞書）でデータが返ってきても絶対にクラッシュしない安全なタイトル抽出処理
     th = res.get("thread", [])
-    tname = "不明"
-    if isinstance(th, dict):
-        tname = th.get('title', '不明')
-    elif isinstance(th, list) and len(th) > 0:
-        if isinstance(th[0], dict):
-            tname = th[0].get('title', '不明')
-            
+    tname = th.get('title', '不明') if isinstance(th, dict) else (th.get('title', '不明') if isinstance(th, list) and len(th) > 0 else "不明")
     return render_template('board.html', v='thread', cid=cid, tid=tid, tname=tname, items=res.get("posts", []), login_user="名無しさん", count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
@@ -67,16 +58,8 @@ def post_form(cid, tid):
     if cid != 1: return redirect('/')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
-    
-    # 🛠️ 書き込みフォーム画面でも同様に安全なタイトル抽出処理を適用
     th = res.get("thread", [])
-    tname = "不明"
-    if isinstance(th, dict):
-        tname = th.get('title', '不明')
-    elif isinstance(th, list) and len(th) > 0:
-        if isinstance(th[0], dict):
-            tname = th[0].get('title', '不明')
-            
+    tname = th.get('title', '不明') if isinstance(th, dict) else (th.get('title', '不明') if isinstance(th, list) and len(th) > 0 else "不明")
     return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=tname, login_user="名無しさん", count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
