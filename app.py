@@ -49,8 +49,15 @@ def v_thread(cid, tid):
     if cid != 1: return redirect('/')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
+    
+    # 🛠️ リスト型・辞書型の両方に完全対応した安全なタイトル抽出ロジック
     th = res.get("thread", [])
-    tname = th.get('title', '不明') if isinstance(th, dict) else (th.get('title', '不明') if isinstance(th, list) and len(th) > 0 else "不明")
+    tname = "不明"
+    if isinstance(th, list) and len(th) > 0:
+        tname = th[0].get('title', '不明') if isinstance(th[0], dict) else "不明"
+    elif isinstance(th, dict):
+        tname = th.get('title', '不明')
+            
     return render_template('board.html', v='thread', cid=cid, tid=tid, tname=tname, items=res.get("posts", []), login_user="名無しさん", count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/post_form')
@@ -58,8 +65,15 @@ def post_form(cid, tid):
     if cid != 1: return redirect('/')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
+    
+    # 🛠️ 投稿フォーム側も同様の安全ロジックに修正
     th = res.get("thread", [])
-    tname = th.get('title', '不明') if isinstance(th, dict) else (th.get('title', '不明') if isinstance(th, list) and len(th) > 0 else "不明")
+    tname = "不明"
+    if isinstance(th, list) and len(th) > 0:
+        tname = th[0].get('title', '不明') if isinstance(th[0], dict) else "不明"
+    elif isinstance(th, dict):
+        tname = th.get('title', '不明')
+            
     return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=tname, login_user="名無しさん", count=get_image_upload_count())
 
 @app.route('/c/<int:cid>/t/<int:tid>/p', methods=['POST'])
