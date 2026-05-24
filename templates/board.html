@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{{ cname }} - スレット</title>
+    <title>mynote ver4.0: {{ cname }} - スレット</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
         body { font-family: sans-serif; background: #fffff0; color: #000000; padding: 20px; }
@@ -26,6 +26,7 @@
     <div id="flash-area" class="error-msg"></div>
 
     {% if v == 'class' %}
+    <a href="/"><h1>掲示板メニュー</h1></a>
         <div class="thread-title">{{ cname }} - スレッド一覧</div>
         [<a href="/c/{{ cid }}/create_form">新しいスレッドを建てる</a>]
         <hr>
