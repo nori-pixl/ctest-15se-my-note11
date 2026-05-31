@@ -23,6 +23,8 @@ get_login_user = lambda: request.cookies.get('login_user', '')
 
 # 🛠️ ログイン有無を瞬間検知して割り振るセキュリティチェッカ
 # 🛠️ ログインの有無をチェックし、名前がクッキーになければ即座に False を返す関数
+
+# 🛠️ ログインの有無をチェックし、名前がクッキーになければ即座に False を返す関数
 def check_auth_or_redirect():
     if not request.cookies.get('login_user'): return False
     return True
@@ -55,12 +57,6 @@ def get_storage_size_mb():
             if os.path.exists(fp): total_size += os.path.getsize(fp)
     return f"{total_size / (1024 * 1024):.2f} MB"
 
-@app.route('/')
-def index():
-    if not check_auth_or_redirect(): return redirect('/login')
-    try: res = requests.get(f"{TERMUX_API_BASE}/api/classes", timeout=10).json()
-    except: res = {}
-    return render_template('menu.html', items=res.get("classes", []), login_user=get_login_user())
 
 # 🔒 [ログイン処理] 名前とパスをタブレットのMySQLへ送信して認証
 @app.route('/login', methods=['GET', 'POST'])
