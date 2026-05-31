@@ -21,10 +21,21 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '')
 
-# 🛠️ ログイン有無を瞬間検知して割り振るセキュリティチェッカー関数
+# 🛠️ ログイン有無を瞬間検知して割り振るセキュリティチェッカ
+# 🛠️ ログインの有無をチェックし、名前がクッキーになければ即座に False を返す関数
 def check_auth_or_redirect():
     if not request.cookies.get('login_user'): return False
     return True
+
+@app.route('/')
+def index():
+    # 🌟 初めて入った人やログアウト後の人がここを開くと、自動でログイン画面へ飛ばします
+    if not check_auth_or_redirect(): return redirect('/login')
+    
+    try: res = requests.get(f"{TERMUX_API_BASE}/api/classes", timeout=10).json()
+    except: res = {}
+    return render_template('menu.html', items=res.get("classes", []), login_user=get_login_user())
+
 
 def generate_random_hex():
     return ''.join(secrets.choice('0123456789abcdefABCDEF') for _ in range(20))
