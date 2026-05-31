@@ -4,30 +4,49 @@
     <title>ログイン</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
-        body { font-family: monospace; background: #000000; color: #00ff00; padding: 40px 20px; text-align: center; }
-        .login-box { max-width: 350px; margin: 60px auto; background: #111; border: 1px solid #00ff00; padding: 25px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
-        .title { font-size: 1.4em; font-weight: bold; margin-bottom: 20px; letter-spacing: 1px; color: #ffff00; }
-        input[type="text"], input[type="password"] { background: #000; color: #00ff00; border: 1px solid #333; padding: 8px; width: 90%; margin-bottom: 15px; text-align: center; font-family: monospace; }
-        input:focus { border-color: #00ff00; outline: none; }
-        button { background: #00ff00; color: #000; border: none; padding: 8px 25px; font-weight: bold; cursor: pointer; font-family: monospace; width: 95%; margin-bottom: 15px; }
-        button:hover { background: #00cc00; }
-        a { color: #ffff00; text-decoration: none; font-size: 0.9em; }
+        /* 🌟 menu.html / board.html のレトロなスタイルシートと完全に一致させています */
+        body { font-family: sans-serif; background: #fffff0; color: #000000; padding: 20px; line-height: 1.4; }
+        a { color: #0000ff; text-decoration: none; font-weight: bold; }
         a:hover { text-decoration: underline; }
-        .error-msg { color: #ff0000; font-weight: bold; font-size: 0.9em; margin-bottom: 15px; }
+        .menu-title { font-size: 1.4em; font-weight: bold; color: #ff0000; text-align: center; margin-bottom: 15px; border-bottom: 2px solid #ff0000; padding-bottom: 10px; }
+        .section-title { font-size: 1.1em; font-weight: bold; color: #ff0000; margin-top: 25px; margin-bottom: 10px; border-left: 4px solid #ff0000; padding-left: 8px; }
+        .form-table { background: #fafafa; border: 1px solid #ccc; padding: 15px; width: 100%; max-width: 450px; margin: 0 auto; border-radius: 4px; }
+        input[type="text"], input[type="password"] { background: #ffffff; color: #000000; border: 1px solid #ccc; padding: 6px; width: 180px; }
+        input:focus { border-color: #ff0000; outline: none; }
+        button { background: #fafafa; color: #000000; border: 1px solid #ccc; padding: 4px 12px; cursor: pointer; font-weight: bold; }
+        button:hover { background: #eee; }
+        .error-msg { color: #ff0000; font-weight: bold; margin-bottom: 15px; text-align: center; }
+        .link-box { text-align: center; margin-top: 20px; font-size: 0.95em; }
     </style>
 </head>
 <body>
-    <div class="login-box">
-        
-        {% with messages = get_flashed_messages() %}
-          {% if messages %}{% for message in messages %}<div class="error-msg">{{ message }}</div>{% endfor %}{% endif %}
-        {% endwith %}
-        <form method="POST" action="/login">
-            <input type="text" name="username" placeholder="ユーザー名" required autocomplete="off">
-            <input type="password" name="password" placeholder="パスワード" required>
-            <button type="submit">ログイン</button>
-        </form>
-        <div><a href="/register">新規アカウント作成画面>></a></div>
+    <div class="menu-title">掲示板システム・ログインポータル</div>
+    
+    {% with messages = get_flashed_messages() %}
+      {% if messages %}{% for message in messages %}<div class="error-msg">[注意] {{ message }}</div>{% endfor %}{% endif %}
+    {% endwith %}
+
+    <div class="section-title" style="text-align: center; max-width: 450px; margin-left: auto; margin-right: auto;">ログイン情報を入力してください</div>
+    
+    <form method="POST" action="/login">
+        <table class="form-table" border="0">
+            <tr>
+                <td style="width: 100px;">なまえ:</td>
+                <td><input type="text" name="username" placeholder="ユーザー名" required autocomplete="off"></td>
+            </tr>
+            <tr>
+                <td>パスワード:</td>
+                <td><input type="password" name="password" placeholder="パスワード" required></td>
+            </tr>
+            <tr>
+                <td></td>
+                <td style="padding-top: 10px;"><button type="submit">ログインする</button></td>
+            </tr>
+        </table>
+    </form>
+    
+    <div class="link-box">
+        <a href="/register">新しくアカウントを作る場合はこちら >></a>
     </div>
 </body>
 </html>
