@@ -1,15 +1,17 @@
 import os, datetime, requests, uuid, secrets, time
-from flask import Flask, request, redirect, render_template, make_response, url_for, flash, jsonify
+from flask import Flask, request, redirect, render_template, make_response, url_for, flash, jsonify, render_template_string
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "temporary_secret_key_string")
 TERMUX_API_BASE = os.environ.get("TERMUX_API_URL", "https://trycloudflare.com")
 
-# 🛠️ 【管理者ログイン用】特定の名前とパスワード
 GOD_NAME = "管理人"
 GOD_PASS = "admin777"
 
 START_TIME = time.time()
+
+# 🛠️ 1行にすべてを詰め込んだ、4xx系共通の「漆黒の無敵エラーHTMLテンプレート文字列」
+ERR_HTML = '<!DOCTYPE html><html><head><title>error</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:monospace;background:#000;color:#f00;padding:40px 20px;text-align:center;}a{color:#f00;text-decoration:none;font-weight:bold;border:1px solid #f00;padding:5px 15px;border-radius:3px;display:inline-block;margin-top:25px;}.box{max-width:500px;margin:0 auto;text-align:left;background:#111;border:1px dashed #f00;padding:20px;font-size:0.95em;line-height:1.6;}.t{font-weight:bold;margin-bottom:10px;border-bottom:1px solid #f00;padding-bottom:5px;}</style></head><body><div style="font-size:2.2em;font-weight:bold;margin-bottom:30px;">error:{{code}}</div><div class="box"><div class="t">なぜ表示されたか</div><div>1, 指定されたリクエストまたはクラスIDが存在しない、もしくは拒否された可能性があります。</div><div>2, アクセス権限のない不正な操作、またはサーバーの接続が切れている可能性があります。</div></div><div><a href="/">ホームに戻る</a></div></body></html>'
 
 UPLOAD_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 if not os.path.exists(UPLOAD_FOLDER): os.makedirs(UPLOAD_FOLDER)
@@ -39,8 +41,7 @@ def get_storage_size_mb():
 
 @app.route('/')
 def index():
-    if not request.cookies.get('login_user'):
-        return redirect('/login')
+    if not request.cookies.get('login_user'): return redirect('/login')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/classes", timeout=10).json()
     except: res = {}
     return render_template('menu.html', items=res.get("classes", []), login_user=get_login_user())
@@ -89,30 +90,16 @@ def logout():
 @app.route('/developer')
 def developer_panel():
     current_hex = request.cookies.get('hex_user_id', '')
-    if current_hex != "00000000000000000000":
-        return render_template('403.html'), 403
-        
+    if current_hex != "00000000000000000000": return render_template_string(ERR_HTML, code="403"), 403
     diff = int(time.time() - START_TIME)
     days, rem = divmod(diff, 86400)
     hours, rem = divmod(rem, 3600)
     mins, secs = divmod(rem, 60)
     uptime_str = f"{days}日 {hours}時間 {mins}分 {secs}秒"
-
     try: classes_res = requests.get(f"{TERMUX_API_BASE}/api/classes", timeout=10).json()
     except: classes_res = {}
-    
-    mock_schemas = [
-        {"db_name": "board_db", "tables": ["classes", "threads", "posts"]},
-        {"db_name": "information_schema", "tables": ["TABLES", "COLUMNS", "SCHEMATA"]}
-    ]
-
-    return render_template('dev.html', 
-                           uptime=uptime_str,
-                           storage_size=get_storage_size_mb(),
-                           db_count=len(mock_schemas),
-                           db_schemas=mock_schemas,
-                           dev_id=current_hex,
-                           classes_raw=classes_res.get("classes", []))
+    mock_schemas = [{"db_name": "board_db", "tables": ["classes", "threads", "posts"]}]
+    return render_template('dev.html', uptime=uptime_str, storage_size=get_storage_size_mb(), db_count=len(mock_schemas), db_schemas=mock_schemas, dev_id=current_hex, classes_raw=classes_res.get("classes", []))
 
 @app.route('/c/new_class', methods=['POST'])
 def new_class():
@@ -127,34 +114,27 @@ def del_class(cid):
     except: flash("クラス削除エラー")
     return redirect('/')
 
-# 🛠️ 存在しないクラスIDが入力された際、404ではなく403画面を呼び出すように変更
+# 🛠️ 存在しないクラスIDが入力された際、内蔵HTMLの403画面を呼び出す
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
     target_id = request.form.get("five_id", "").strip()
     if target_id == "00001": target_id = "1"
     if target_id:
         try:
-            # データベースサーバーにそのクラスが存在するか確認
             res = requests.get(f"{TERMUX_API_BASE}/api/class/{target_id}", timeout=10).json()
-            if res.get("success") and res.get("class"):
-                return redirect(f'/c/{target_id}')
-        except:
-            pass
-    return render_template('403.html'), 403
+            if res.get("success") and res.get("class"): return redirect(f'/c/{target_id}')
+        except: pass
+    return render_template_string(ERR_HTML, code="403"), 403
 
 @app.route('/view_image')
 def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
 
-# 🛠️ URL直接入力などで、データベースに存在しないクラスを踏んだ場合も403画面を出す
+# 🛠️ URL直接入力などで、データベースに存在しないクラスを踏んだ場合も内蔵HTMLの403画面を出す
 @app.route('/c/<string:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {'success': False}
-    
-    # 未追加・存在しないクラスの場合は、404ではなく403エラー画面で弾く
-    if not res.get("success") or not res.get("class"): 
-        return render_template('403.html'), 403
-        
+    if not res.get("success") or not res.get("class"): return render_template_string(ERR_HTML, code="403"), 403
     return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<string:cid>/create_form')
@@ -173,7 +153,7 @@ def new_t(cid):
                 resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
                 resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
                 return resp
-        except: return render_template('404.html')
+        except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_class', cid=cid))
 
 @app.route('/c/<string:cid>/t/<int:tid>')
@@ -191,13 +171,13 @@ def post_form(cid, tid):
 @app.route('/c/<string:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': request.form.get('name', get_login_user()), 'message': request.form.get('b', ''), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10)
-    except: return render_template('404.html')
+    except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 @app.route('/c/<string:cid>/t/<int:tid>/p_chunk', methods=['POST'])
 def post_chunk(cid, tid):
     cnt = get_image_upload_count()
-    if cnt >= 5: return "本日の画像アップロード上限（5回）に達しました。", 400
+    if cnt >= 5: return render_template_string(ERR_HTML, code="403"), 403
     f = request.files.get('image_chunk')
     if not f: return "No chunk file", 400
     upload_id, chunk_index, total_chunks = request.form.get('upload_id'), int(request.form.get('chunk_index', 0)), int(request.form.get('total_chunks', 10))
@@ -219,20 +199,24 @@ def post_chunk(cid, tid):
 @app.route('/del_t/<string:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_thread", json={"tid": tid}, timeout=10)
-    except: return render_template('404.html')
+    except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_class', cid=cid))
 
 @app.route('/del_p/<string:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_post", json={"pid": pid}, timeout=10)
-    except: return render_template('404.html')
+    except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
-@app.errorhandler(403)
-def forbidden_error(e): return render_template('403.html'), 403
+# 🛠️ 【最強の4xxエラー一括捕獲ハンドラー】402を除く400〜451の全27種類を配列で完全定義してループ登録
+ERR_CODES = [400, 401, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418, 421, 422, 423, 424, 425, 426, 428, 429, 431, 451]
 
-@app.errorhandler(404)
-def page_not_found(e): return render_template('404.html'), 404
+def make_error_handler(code):
+    def error_handler(e): return render_template_string(ERR_HTML, code=str(code)), code
+    return error_handler
+
+for code in ERR_CODES:
+    app.register_error_handler(code, make_error_handler(code))
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
