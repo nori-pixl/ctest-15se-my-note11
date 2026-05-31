@@ -19,7 +19,12 @@ TEMP_DIR = os.path.join(UPLOAD_FOLDER, "chunks_tmp")
 if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
-get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
+get_login_user = lambda: request.cookies.get('login_user', '')
+
+# 🛠️ ログイン有無を瞬間検知して割り振るセキュリティチェッカー関数
+def check_auth_or_redirect():
+    if not request.cookies.get('login_user'): return False
+    return True
 
 def generate_random_hex():
     return ''.join(secrets.choice('0123456789abcdefABCDEF') for _ in range(20))
@@ -41,43 +46,55 @@ def get_storage_size_mb():
 
 @app.route('/')
 def index():
-    if not request.cookies.get('login_user'): return redirect('/login')
+    if not check_auth_or_redirect(): return redirect('/login')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/classes", timeout=10).json()
     except: res = {}
     return render_template('menu.html', items=res.get("classes", []), login_user=get_login_user())
 
+# 🔒 [ログイン処理] 名前とパスをタブレットのMySQLへ送信して認証
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
-        if not username or not password:
+        u = request.form.get('username', '').strip()
+        p = request.form.get('password', '').strip()
+        if not u or not p:
             flash("名前とパスワードを入力してください")
             return redirect('/login')
-        resp = make_response(redirect('/'))
-        resp.set_cookie('login_user', username, max_age=60*60*24*30)
-        if username == GOD_NAME and password == GOD_PASS:
-            resp.set_cookie('hex_user_id', '00000000000000000000', max_age=60*60*24*365)
-        else:
-            resp.set_cookie('hex_user_id', generate_random_hex(), max_age=60*60*24*365)
-        return resp
+        try:
+            # タブレットのMySQL側へ照合リクエスト
+            api_res = requests.post(f"{TERMUX_API_BASE}/api/login_check", json={"username": u, "password": p}, timeout=10).json()
+            if api_res.get("success"):
+                resp = make_response(redirect('/'))
+                resp.set_cookie('login_user', u, max_age=60*60*24*30)
+                resp.set_cookie('hex_user_id', api_res.get("hex_id"), max_age=60*60*24*365)
+                return resp
+            else: flash(api_res.get("message", "ログインに失敗しました"))
+        except: flash("データベースサーバーに接続できません。")
+        return redirect('/login')
     return render_template('login.html')
 
+# 📝 [新規アカウント作成] タブレット側のMySQLに永久同期保存する
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form.get('username', '').strip()
-        password = request.form.get('password', '').strip()
-        if not username or not password:
+        u = request.form.get('username', '').strip()
+        p = request.form.get('password', '').strip()
+        if not u or not p:
             flash("すべての項目を入力してください")
             return redirect('/register')
-        resp = make_response(redirect('/'))
-        resp.set_cookie('login_user', username, max_age=60*60*24*30)
-        if username == GOD_NAME and password == GOD_PASS:
-            resp.set_cookie('hex_user_id', '00000000000000000000', max_age=60*60*24*365)
-        else:
-            resp.set_cookie('hex_user_id', generate_random_hex(), max_age=60*60*24*365)
-        return resp
+        
+        # IDの割振判定（管理人の名前とパスなら神ID、一般ならランダム20桁）
+        hex_id = "00000000000000000000" if (u == GOD_NAME and p == GOD_PASS) else generate_random_hex()
+        try:
+            api_res = requests.post(f"{TERMUX_API_BASE}/api/register", json={"username": u, "password": p, "hex_id": hex_id}, timeout=10).json()
+            if api_res.get("success"):
+                resp = make_response(redirect('/'))
+                resp.set_cookie('login_user', u, max_age=60*60*24*30)
+                resp.set_cookie('hex_user_id', hex_id, max_age=60*60*24*365)
+                return resp
+            else: flash(api_res.get("message", "作成に失敗しました"))
+        except: flash("データベースサーバーへの同期保存に失敗しました。")
+        return redirect('/register')
     return render_template('register.html')
 
 @app.route('/logout')
@@ -103,6 +120,7 @@ def developer_panel():
 
 @app.route('/c/new_class', methods=['POST'])
 def new_class():
+    if not check_auth_or_redirect(): return redirect('/login')
     if request.form.get('cname'):
         try: requests.post(f"{TERMUX_API_BASE}/api/classes", json={"name": request.form.get('cname')}, timeout=10)
         except: flash("クラス追加エラー")
@@ -110,13 +128,14 @@ def new_class():
 
 @app.route('/c/<string:cid>/delete', methods=['POST'])
 def del_class(cid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: requests.post(f"{TERMUX_API_BASE}/api/del_class", json={"cid": str(cid)}, timeout=10)
     except: flash("クラス削除エラー")
     return redirect('/')
 
-# 🛠️ 存在しないクラスIDが入力された際、内蔵HTMLの403画面を呼び出す
 @app.route('/c/jump_by_id', methods=['POST'])
 def jump_by_id():
+    if not check_auth_or_redirect(): return redirect('/login')
     target_id = request.form.get("five_id", "").strip()
     if target_id == "00001": target_id = "1"
     if target_id:
@@ -127,21 +146,26 @@ def jump_by_id():
     return render_template_string(ERR_HTML, code="403"), 403
 
 @app.route('/view_image')
-def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
+def view_image():
+    if not check_auth_or_redirect(): return redirect('/login')
+    return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
 
-# 🛠️ URL直接入力などで、データベースに存在しないクラスを踏んだ場合も内蔵HTMLの403画面を出す
 @app.route('/c/<string:cid>')
 def v_class(cid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
     except: res = {'success': False}
     if not res.get("success") or not res.get("class"): return render_template_string(ERR_HTML, code="403"), 403
     return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<string:cid>/create_form')
-def create_form(cid): return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
+def create_form(cid):
+    if not check_auth_or_redirect(): return redirect('/login')
+    return render_template('board.html', v='create_form', cid=cid, login_user=get_login_user())
 
 @app.route('/c/<string:cid>/new', methods=['POST'])
 def new_t(cid):
+    if not check_auth_or_redirect(): return redirect('/login')
     t, b = request.form.get('t'), request.form.get('b')
     if t and b:
         try:
@@ -158,24 +182,28 @@ def new_t(cid):
 
 @app.route('/c/<string:cid>/t/<int:tid>')
 def v_thread(cid, tid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
     return render_template('board.html', v='thread', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), items=res.get("posts", []), login_user=get_login_user(), count=get_image_upload_count())
 
 @app.route('/c/<string:cid>/t/<int:tid>/post_form')
 def post_form(cid, tid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: res = requests.get(f"{TERMUX_API_BASE}/api/thread/{tid}", timeout=10).json()
     except: res = {}
     return render_template('board.html', v='post_form', cid=cid, tid=tid, tname=safe_get_title(res.get("thread", [])), login_user=get_login_user(), count=get_image_upload_count())
 
 @app.route('/c/<string:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': request.form.get('name', get_login_user()), 'message': request.form.get('b', ''), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10)
     except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 @app.route('/c/<string:cid>/t/<int:tid>/p_chunk', methods=['POST'])
 def post_chunk(cid, tid):
+    if not check_auth_or_redirect(): return "Unauthorized", 401
     cnt = get_image_upload_count()
     if cnt >= 5: return render_template_string(ERR_HTML, code="403"), 403
     f = request.files.get('image_chunk')
@@ -198,21 +226,20 @@ def post_chunk(cid, tid):
 
 @app.route('/del_t/<string:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: requests.post(f"{TERMUX_API_BASE}/api/del_thread", json={"tid": tid}, timeout=10)
     except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_class', cid=cid))
 
 @app.route('/del_p/<string:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
+    if not check_auth_or_redirect(): return redirect('/login')
     try: requests.post(f"{TERMUX_API_BASE}/api/del_post", json={"pid": pid}, timeout=10)
     except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
-# 🛠️ 【Flask対応版に修正】402を除く、公式に認識される4xx系エラーコードのみに厳選して一括ループ登録
-ERR_CODES = [
-    400, 401, 403, 404, 405, 408, 409, 410, 411, 412, 413, 
-    414, 415, 416, 417, 418, 422, 423, 424, 428, 429, 431, 451
-]
+# 🛠️ 402を除く公式サポート4xxエラー（全27種）を動的登録して一括捕獲
+ERR_CODES = [400, 401, 403, 404, 405, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418, 422, 423, 424, 428, 429, 431, 451]
 
 def make_error_handler(code):
     def error_handler(e): return render_template_string(ERR_HTML, code=str(code)), code
