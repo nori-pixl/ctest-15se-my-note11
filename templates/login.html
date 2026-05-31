@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ログイン - BBS</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <style>
+        body { font-family: monospace; background: #000000; color: #00ff00; padding: 40px 20px; text-align: center; }
+        .login-box { max-width: 350px; margin: 60px auto; background: #111; border: 1px solid #00ff00; padding: 25px; border-radius: 5px; box-shadow: 0 0 15px rgba(0,255,0,0.2); }
+        .title { font-size: 1.4em; font-weight: bold; margin-bottom: 20px; letter-spacing: 1px; color: #ffff00; }
+        input[type="text"], input[type="password"] { background: #000; color: #00ff00; border: 1px solid #333; padding: 8px; width: 90%; margin-bottom: 15px; text-align: center; font-family: monospace; }
+        input:focus { border-color: #00ff00; outline: none; }
+        button { background: #00ff00; color: #000; border: none; padding: 8px 25px; font-weight: bold; cursor: pointer; font-family: monospace; width: 95%; margin-bottom: 15px; }
+        button:hover { background: #00cc00; }
+        a { color: #ffff00; text-decoration: none; font-size: 0.9em; }
+        a:hover { text-decoration: underline; }
+        .error-msg { color: #ff0000; font-weight: bold; font-size: 0.9em; margin-bottom: 15px; }
+    </style>
+</head>
+<body>
+    <div class="login-box">
+        <div class="title">🔒 GATEWAY LOGIN</div>
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}{% for message in messages %}<div class="error-msg">{{ message }}</div>{% endfor %}{% endif %}
+        {% endwith %}
+        <form method="POST" action="/login">
+            <input type="text" name="username" placeholder="USERNAME" required autocomplete="off">
+            <input type="password" name="password" placeholder="PASSWORD" required>
+            <button type="submit">CONNECT TO CORE</button>
+        </form>
+        <div><a href="/register">新規アカウント作成画面へ >></a></div>
+    </div>
+</body>
+</html>
