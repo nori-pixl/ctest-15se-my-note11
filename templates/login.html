@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>ログイン - BBS</title>
+    <title>ログイン</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
         body { font-family: monospace; background: #000000; color: #00ff00; padding: 40px 20px; text-align: center; }
@@ -18,16 +18,16 @@
 </head>
 <body>
     <div class="login-box">
-        <div class="title">🔒 GATEWAY LOGIN</div>
+        
         {% with messages = get_flashed_messages() %}
           {% if messages %}{% for message in messages %}<div class="error-msg">{{ message }}</div>{% endfor %}{% endif %}
         {% endwith %}
         <form method="POST" action="/login">
-            <input type="text" name="username" placeholder="USERNAME" required autocomplete="off">
-            <input type="password" name="password" placeholder="PASSWORD" required>
-            <button type="submit">CONNECT TO CORE</button>
+            <input type="text" name="username" placeholder="ユーザー名" required autocomplete="off">
+            <input type="password" name="password" placeholder="パスワード" required>
+            <button type="submit">ログイン</button>
         </form>
-        <div><a href="/register">新規アカウント作成画面へ >></a></div>
+        <div><a href="/register">新規アカウント作成画面>></a></div>
     </div>
 </body>
 </html>
