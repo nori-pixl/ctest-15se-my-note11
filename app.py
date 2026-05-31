@@ -208,8 +208,11 @@ def del_p(cid, tid, pid):
     except: return render_template_string(ERR_HTML, code="404"), 404
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
-# 🛠️ 【最強の4xxエラー一括捕獲ハンドラー】402を除く400〜451の全27種類を配列で完全定義してループ登録
-ERR_CODES = [400, 401, 403, 404, 405, 406, 407, 408, 409, 410, 411, 412, 413, 414, 415, 416, 417, 418, 421, 422, 423, 424, 425, 426, 428, 429, 431, 451]
+# 🛠️ 【Flask対応版に修正】402を除く、公式に認識される4xx系エラーコードのみに厳選して一括ループ登録
+ERR_CODES = [
+    400, 401, 403, 404, 405, 408, 409, 410, 411, 412, 413, 
+    414, 415, 416, 417, 418, 422, 423, 424, 428, 429, 431, 451
+]
 
 def make_error_handler(code):
     def error_handler(e): return render_template_string(ERR_HTML, code=str(code)), code
