@@ -13,10 +13,9 @@ if not os.path.exists(TEMP_DIR): os.makedirs(TEMP_DIR)
 get_image_upload_count = lambda: int(request.cookies.get('img_upload_count', 0))
 get_login_user = lambda: request.cookies.get('login_user', '名無しさん')
 
-# 🛠️ 【バグ完全修正】「data[0]」と正確に指定し、MySQLのリスト構造から100%確実に辞書を引っこ抜く構造に修正
 def safe_get_title(data, key_name='title'):
     if isinstance(data, list) and len(data) > 0:
-        first_item = data[0]  # 🌟 リストの最初の要素（辞書）を正確に抽出
+        first_item = data[0]
         if isinstance(first_item, dict): return first_item.get(key_name, '不明')
     if isinstance(data, dict): return data.get(key_name, '不明')
     return '不明'
@@ -51,7 +50,7 @@ def jump_by_id():
     target_id = request.form.get("five_id", "").strip()
     if target_id == "00001": target_id = "1"
     if target_id: return redirect(f'/c/{target_id}')
-    flash("正しいIDを入力してください"); return redirect('/')
+    return render_template('404.html')
 
 @app.route('/view_image')
 def view_image(): return render_template('img.html', img_path=f"/static/{request.args.get('f', '')}")
@@ -59,8 +58,12 @@ def view_image(): return render_template('img.html', img_path=f"/static/{request
 @app.route('/c/<string:cid>')
 def v_class(cid):
     try: res = requests.get(f"{TERMUX_API_BASE}/api/class/{cid}", timeout=10).json()
-    except: res = {}
-    if not res.get("success"): flash("指定されたクラスが見つかりません。"); return redirect('/')
+    except: res = {'success': False}
+    
+    # 🛠️ 指定クラスが存在しない、またはデータベース接続切れの時は404.htmlを出す
+    if not res.get("success") or not res.get("class"): 
+        return render_template('404.html')
+        
     return render_template('board.html', v='class', cid=cid, cname=safe_get_title(res.get("class", {}), 'name'), items=res.get("threads", []), vlist=request.cookies.get('vlist', '').split(','), login_user=get_login_user())
 
 @app.route('/c/<string:cid>/create_form')
@@ -79,7 +82,7 @@ def new_t(cid):
                 resp = make_response(redirect(url_for('v_thread', cid=cid, tid=tid)))
                 resp.set_cookie('vlist', ','.join(vlist), max_age=60*60*24*30)
                 return resp
-        except: flash("スレッド作成エラー")
+        except: return render_template('404.html')
     return redirect(url_for('v_class', cid=cid))
 
 @app.route('/c/<string:cid>/t/<int:tid>')
@@ -97,7 +100,7 @@ def post_form(cid, tid):
 @app.route('/c/<string:cid>/t/<int:tid>/p', methods=['POST'])
 def post(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/posts", json={'name': request.form.get('name', get_login_user()), 'message': request.form.get('b', ''), 'thread_id': tid, 'd': datetime.datetime.now().strftime('%m/%d %H:%M')}, timeout=10)
-    except: flash("投稿エラー")
+    except: return render_template('404.html')
     return redirect(url_for('v_thread', cid=cid, tid=tid))
 
 @app.route('/c/<string:cid>/t/<int:tid>/p_chunk', methods=['POST'])
@@ -125,14 +128,18 @@ def post_chunk(cid, tid):
 @app.route('/del_t/<string:cid>/<int:tid>', methods=['POST'])
 def del_t(cid, tid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_thread", json={"tid": tid}, timeout=10)
-    except: flash("削除通信エラー")
+    except: return render_template('404.html')
     return redirect(url_for('v_class', cid=cid))
 
 @app.route('/del_p/<string:cid>/<int:tid>/<int:pid>', methods=['POST'])
 def del_p(cid, tid, pid):
     try: requests.post(f"{TERMUX_API_BASE}/api/del_post", json={"pid": pid}, timeout=10)
-    except: flash("削除通信エラー")
+    except: return render_template('404.html')
     return redirect(url_for('v_thread', cid=cid, tid=tid))
+
+# 🛠️ アプリのURLに直接デタラメな文字を入力された時も404画面を出す
+@app.errorhandler(404)
+def page_not_found(e): return render_template('404.html'), 404
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8000))
